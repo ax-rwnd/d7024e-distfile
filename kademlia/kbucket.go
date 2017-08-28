@@ -22,7 +22,7 @@ type KBucket struct {
 }
 
 //Create a KBucket with k capacity and a limited slice
-func CreateKBucket(capacity int) (output KBucket) {
+func NewKBucket(capacity int) (output KBucket) {
     output.hosts = make([]Node, Replication_factor)
     output.elements = 0
     output.capacity = capacity
