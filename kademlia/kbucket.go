@@ -11,7 +11,8 @@
 package kademlia
 
 //Global k-factor that determines the replicativity of the system
-const k_repfactor = 20
+//const Replication_factor = 20
+var Replication_factor int
 
 //A list of the nodes that have a specific distance from some other node
 type KBucket struct {
@@ -22,7 +23,7 @@ type KBucket struct {
 
 //Create a KBucket with k capacity and a limited slice
 func CreateKBucket(capacity int) (output KBucket) {
-    output.hosts = make([]Node, k_repfactor)
+    output.hosts = make([]Node, Replication_factor)
     output.elements = 0
     output.capacity = capacity
     return
@@ -43,7 +44,7 @@ func (t *KBucket) Insert(target *Node) error {
     }
 
     //If the list is full already, try tp evict oldest
-    if t.elements >= t.capacity || t.elements >= 20 {
+    if t.elements >= t.capacity || t.elements >= Replication_factor {
         if err := t.Evict(); err != nil {
             return err
         }
@@ -57,6 +58,7 @@ func (t *KBucket) Insert(target *Node) error {
 
 //Try to evict the head of the list
 func (t *KBucket) Evict() error {
-    //TODO: not implemented
+    //Ping head host, evict if non-responsive
+    //If responsive, fail with error
     return nil
 }

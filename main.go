@@ -1,8 +1,8 @@
 package main
 
 import (
-    "./kademlia"
     "fmt"
+    "./kademlia"
     "github.com/BurntSushi/toml"
 )
 
@@ -20,12 +20,17 @@ type hostConf struct {
     Port int
 }
 
+//Post-config setup, inject settings and such
+func post_config(config tomlConfig) {
+    kademlia.Replication_factor = config.Kademlia.Replication_factor
+}
+
 func main() {
     var config tomlConfig
     if _, err := toml.DecodeFile("config.toml", &config); err != nil {
         fmt.Println("Error parsing config: ", err)
     }
 
-    a := kademlia.NewNode(true)
-    fmt.Println(a)
+    hostNode := kademlia.NewNode(true)
+    fmt.Println("Running with node:", hostNode)
 }
