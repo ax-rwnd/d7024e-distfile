@@ -1,5 +1,5 @@
 [kademlia]
-id_length = 20 # ID Length in bytes
+replication_factor = 20
 
 [host]
 ip = "0.0.0.0"
