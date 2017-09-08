@@ -13,26 +13,20 @@ import(
 // func (kademliaID KademliaID) CalcDistance(target *KademliaID) *KademliaID
 // func (kademliaID *KademliaID) String()
 
-func TestNewKademliaID(t *testing.T) {
-	
+func TestNewKademliaID(t *testing.T) {	
 	id := NewKademliaID("FFFFFFFF00000000000000000000000000000000")
 	if id == nil {
 		t.Fail()
 	}	
-	
 }
 
-func TestNewRandomKademliaID(t *testing.T) {
-
-	id := NewRandomKademliaID()
+func TestNewRandomKademliaID(t *testing.T) {	id := NewRandomKademliaID()
 	if id == nil {
 		t.Fail()
-	}
-	
+	}	
 }
 
 func TestLess(t *testing.T) {
-
 	id1 := NewKademliaID("FFFFFFFF00000000000000000000000000000000")
 	id2 := NewKademliaID("FFFFFFFF00000000000000000000000000000001")
 	
@@ -68,8 +62,6 @@ func TestEquals(t *testing.T) {
 }
 
 func TestCalcDistance(t *testing.T) {
-
-
 	id1 := NewKademliaID("FFFFFFFF00000000000000000000000000000000")
 	id2 := NewKademliaID("FFFFFFFF00000000000000000000000000000001")
 	
@@ -88,6 +80,5 @@ func TestCalcDistance(t *testing.T) {
 	
 	if *d3 != *d4 {
 		t.Fail()
-	}
-	
+	}	
 }
