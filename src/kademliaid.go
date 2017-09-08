@@ -25,13 +25,9 @@ func NewKademliaID(data string) *KademliaID {
 func NewKademliaIDFromBytes(data []byte) *KademliaID {
 	result := KademliaID{}
 	hash := sha1.Sum(data)
-	for i := IDLength-1; i >= 0; i-- {
-		// SHA1 sum is always 160 bits, IDLength might not be
-		if i < 20 {
-			result[i] = hash[i]
-		} else {
-			result[i] = 0
-		}
+	for i := IDLength - 1; i >= 0; i-- {
+		// SHA1 sum is always 160 bits, IDLength might not be?
+		result[i] = hash[i]
 	}
 	return &result
 }
