@@ -22,6 +22,29 @@ func NewKademliaID(data string) *KademliaID {
 	return &newKademliaID
 }
 
+func NewKademliaIDFromBytes(data []byte) *KademliaID {
+	result := KademliaID{}
+	hash := sha1.Sum(data)
+	for i := IDLength-1; i >= 0; i-- {
+		// SHA1 sum is always 160 bits, IDLength might not be
+		if i < 20 {
+			result[i] = hash[i]
+		} else {
+			result[i] = 0
+		}
+	}
+	return &result
+}
+
+func NewKademliaIDFromFile(filepath string) (*KademliaID, error) {
+	result := KademliaID{}
+	content, err := ioutil.ReadFile(filepath)
+	if err == nil {
+		return NewKademliaIDFromBytes(content), nil
+	}
+	return &result, err
+}
+
 func NewRandomKademliaID() *KademliaID {
 	newKademliaID := KademliaID{}
 	for i := 0; i < IDLength; i++ {
@@ -54,16 +77,6 @@ func (kademliaID KademliaID) CalcDistance(target *KademliaID) *KademliaID {
 		result[i] = kademliaID[i] ^ target[i]
 	}
 	return &result
-}
-
-func NewKademliaIDFromFile(filepath string) (*KademliaID, error) {
-	result := KademliaID{}
-	f, err := ioutil.ReadFile(filepath)
-	hash := sha1.Sum(f)
-	for i := 0; i < IDLength; i++ {
-		result[i] = hash[i]
-	}
-	return &result, err
 }
 
 func (kademliaID *KademliaID) String() string {
