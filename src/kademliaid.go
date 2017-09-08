@@ -3,6 +3,8 @@ package d7024e
 import (
 	"encoding/hex"
 	"math/rand"
+	"io/ioutil"
+	"crypto/sha1"
 )
 
 const IDLength = 20
@@ -52,6 +54,16 @@ func (kademliaID KademliaID) CalcDistance(target *KademliaID) *KademliaID {
 		result[i] = kademliaID[i] ^ target[i]
 	}
 	return &result
+}
+
+func NewKademliaIDFromFile(filepath string) (*KademliaID, error) {
+	result := KademliaID{}
+	f, err := ioutil.ReadFile(filepath)
+	hash := sha1.Sum(f)
+	for i := 0; i < IDLength; i++ {
+		result[i] = hash[i]
+	}
+	return &result, err
 }
 
 func (kademliaID *KademliaID) String() string {
