@@ -40,7 +40,7 @@ func TestRoutingTableFindClosestContacts(t *testing.T) {
 		allcontacts[i] = contact
 		rt.AddContact(contact)
 	}
-	// Find the closest contacts to 'toFind'. Contacts are be sorted (test?) according to min distance
+	// Find the closest contacts to 'toFind'. Contacts are sorted (test?) according to min distance
 	contacts := rt.FindClosestContacts(idToFind, maxResults)
 	if len(contacts) == 0 || len(contacts) > maxResults {
 		t.Fail()

@@ -16,10 +16,11 @@ func NewRoutingTable(me Contact) *RoutingTable {
 	return routingTable
 }
 
-func (routingTable *RoutingTable) AddContact(contact Contact) {
+func (routingTable *RoutingTable) AddContact(contact Contact) *Contact {
 	bucketIndex := routingTable.getBucketIndex(contact.ID)
 	bucket := routingTable.buckets[bucketIndex]
 	bucket.AddContact(contact)
+	return &contact
 }
 
 func (routingTable *RoutingTable) FindClosestContacts(target *KademliaID, count int) []Contact {
