@@ -4,13 +4,13 @@ type Kademlia struct {
 }
 
 func (kademlia *Kademlia) LookupContact(target *Contact) {
-	// TODO
+    // TODO
 }
 
 func (kademlia *Kademlia) LookupData(hash string) {
-	// TODO
+    // TODO
 }
 
 func (kademlia *Kademlia) Store(data []byte) {
-	// TODO
+    // TODO
 }

@@ -28,8 +28,8 @@ func TestAddContact(t *testing.T) {
         storage.list.Remove(storage.list.Back()) != b ||
         storage.list.Remove(storage.list.Back()) != c ||
         storage.list.Remove(storage.list.Back()) != d {
-            t.Fail()
-        }
+        t.Fail()
+    }
 }
 
 func TestGetContactAndCalcDistance(t *testing.T) {
@@ -58,7 +58,7 @@ func TestGetContactAndCalcDistance(t *testing.T) {
 func TestLen(t *testing.T) {
     storage := newBucket()
 
-    for i := 0; i< 20; i++ {
+    for i := 0; i < 20; i++ {
         storage.AddContact(NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "localhost:8000"))
     }
 

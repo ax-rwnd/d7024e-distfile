@@ -1,56 +1,56 @@
 package kademlia
 
 import (
-	"fmt"
-	"sort"
+    "fmt"
+    "sort"
 )
 
 type Contact struct {
-	ID       *KademliaID
-	Address  string
-	distance *KademliaID
+    ID       *KademliaID
+    Address  string
+    distance *KademliaID
 }
 
 func NewContact(id *KademliaID, address string) Contact {
-	return Contact{id, address, nil}
+    return Contact{id, address, nil}
 }
 
 func (contact *Contact) CalcDistance(target *KademliaID) {
-	contact.distance = contact.ID.CalcDistance(target)
+    contact.distance = contact.ID.CalcDistance(target)
 }
 
 func (contact *Contact) Less(otherContact *Contact) bool {
-	return contact.distance.Less(otherContact.distance)
+    return contact.distance.Less(otherContact.distance)
 }
 
 func (contact *Contact) String() string {
-	return fmt.Sprintf(`contact("%s", "%s")`, contact.ID, contact.Address)
+    return fmt.Sprintf(`contact("%s", "%s")`, contact.ID, contact.Address)
 }
 
 type ContactCandidates struct {
-	contacts []Contact
+    contacts []Contact
 }
 
 func (candidates *ContactCandidates) Append(contacts []Contact) {
-	candidates.contacts = append(candidates.contacts, contacts...)
+    candidates.contacts = append(candidates.contacts, contacts...)
 }
 
 func (candidates *ContactCandidates) GetContacts(count int) []Contact {
-	return candidates.contacts[:count]
+    return candidates.contacts[:count]
 }
 
 func (candidates *ContactCandidates) Sort() {
-	sort.Sort(candidates)
+    sort.Sort(candidates)
 }
 
 func (candidates *ContactCandidates) Len() int {
-	return len(candidates.contacts)
+    return len(candidates.contacts)
 }
 
 func (candidates *ContactCandidates) Swap(i, j int) {
-	candidates.contacts[i], candidates.contacts[j] = candidates.contacts[j], candidates.contacts[i]
+    candidates.contacts[i], candidates.contacts[j] = candidates.contacts[j], candidates.contacts[i]
 }
 
 func (candidates *ContactCandidates) Less(i, j int) bool {
-	return candidates.contacts[i].Less(&candidates.contacts[j])
+    return candidates.contacts[i].Less(&candidates.contacts[j])
 }

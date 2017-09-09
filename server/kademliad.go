@@ -7,6 +7,7 @@ import (
 )
 
 const config_file = "kademliad.toml"
+
 var stdlog, errlog *log.Logger
 
 // Pre-main initialization
@@ -16,16 +17,16 @@ func init() {
 }
 
 type daemonConfig struct {
-    Address string
-    Port    int
-    Alpha   int
+    Address     string
+    Port        int
+    Alpha       int
     Replication int
 }
 
 func main() {
     var config daemonConfig
     if _, err := toml.DecodeFile(config_file, &config); err != nil {
-        errlog.Println("Error while parsing", config_file,":", err)
+        errlog.Println("Error while parsing", config_file, ":", err)
         os.Exit(1)
     }
 

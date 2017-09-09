@@ -5,9 +5,10 @@ import (
     "github.com/takama/daemon"
     "os"
     "syscall"
-    )
+)
 
 var dependencies = []string{"dummy.service"}
+
 type Service struct {
     daemon.Daemon
 }
@@ -33,33 +34,33 @@ func (service *Service) Manage() (string, error) {
     if len(os.Args) > 1 {
         command := os.Args[1]
         switch command {
-            case "install":
-                return service.Install()
-            case "remove":
-                return service.Remove()
-            case "start":
-                return service.Start()
-            case "stop":
-                return service.Stop()
-            case "status":
-                return service.Status()
-            default:
-                return "Usage: kademliad install | remove | start | stop | status", nil
+        case "install":
+            return service.Install()
+        case "remove":
+            return service.Remove()
+        case "start":
+            return service.Start()
+        case "stop":
+            return service.Stop()
+        case "status":
+            return service.Status()
+        default:
+            return "Usage: kademliad install | remove | start | stop | status", nil
         }
     }
 
-   interrupt := make(chan os.Signal, 1)
-   signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
+    interrupt := make(chan os.Signal, 1)
+    signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
 
     for {
-       select {
-           //TODO: add case(s) to actually do stuff
-           case signal := <-interrupt:
-			stdlog.Println("Got signal:", signal)
-			if signal == os.Interrupt {
-				return "Daemon was interrupted by system signal", nil
-			}
-           return "Daemon was killed.", nil
-       }
-   }
+        select {
+        //TODO: add case(s) to actually do stuff
+        case signal := <-interrupt:
+            stdlog.Println("Got signal:", signal)
+            if signal == os.Interrupt {
+                return "Daemon was interrupted by system signal", nil
+            }
+            return "Daemon was killed.", nil
+        }
+    }
 }
