@@ -7,6 +7,10 @@ import (
     "bufio"
 )
 
+const (
+    NET_STATUS_LISTENING = iota
+)
+
 type Network struct {
     routing       *RoutingTable
     myAddress     net.UDPAddr
@@ -35,7 +39,7 @@ func (network *Network) Listen() {
     if err != nil {
         log.Fatal(err)
     }
-    *network.statusChannel <- 1
+    *network.statusChannel <- NET_STATUS_LISTENING
 
     defer network.connection.Close()
 
@@ -65,21 +69,29 @@ func (network *Network) RespondPingMessage(conn *net.UDPConn, address *net.UDPAd
     }
 }
 
-func (network *Network) SendPingMessage(contact *Contact) {
+func (network *Network) SendPingMessage(contact *Contact) bool {
     conn, err := net.Dial("udp", contact.Address)
     if err != nil {
         fmt.Printf("Error %v dialing contact %v\n", err, *contact)
-        return
+        return false
     }
+    defer conn.Close()
     fmt.Printf("%v sends %v to %v\n", network.myAddress.String(), "ping", contact.Address)
     fmt.Fprintf(conn, "ping")
-    buf := make([]byte, 2048)
-    n, err := bufio.NewReader(conn).Read(buf)
-    message := string(buf[:n])
-
-    fmt.Printf("%v received %v from %v\n", network.myAddress.String(), message, contact.Address)
-
-    conn.Close()
+    for {
+        buf := make([]byte, 2048)
+        n, err := bufio.NewReader(conn).Read(buf)
+        if err != nil {
+            fmt.Printf("Error %v listening to %v\n", err, *contact)
+            return false
+        }
+        message := string(buf[:n])
+        fmt.Printf("%v received %v from %v\n", network.myAddress.String(), message, contact.Address)
+        if message == "pong" {
+            return true
+        }
+    }
+    return false
 }
 
 func (network *Network) SendFindContactMessage(contact *Contact) {
