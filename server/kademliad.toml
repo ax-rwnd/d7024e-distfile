@@ -1,0 +1,4 @@
+address     = "localhost"
+port        = 8000
+alpha       = 3
+replication = 20
