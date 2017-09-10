@@ -1,7 +1,6 @@
 package kademlia
 
 import (
-    "fmt"
     "testing"
 )
 
@@ -10,6 +9,7 @@ func ping(sender *Network, receiver *Contact, c chan bool) {
 }
 
 func TestUDP(t *testing.T) {
+
     var node1 *Network
     var node2 *Network
     var node3 *Network
@@ -19,15 +19,12 @@ func TestUDP(t *testing.T) {
     node3chan := make(chan int)
 
     go func() {
-        fmt.Println("starting node 1")
         node1 = NewNetwork("127.0.0.1", 8000, &node1chan)
     }()
     go func() {
-        fmt.Println("starting node 2")
         node2 = NewNetwork("127.0.0.1", 8001, &node2chan)
     }()
     go func() {
-        fmt.Println("starting node 3")
         node3 = NewNetwork("127.0.0.1", 8002, &node3chan)
     }()
 

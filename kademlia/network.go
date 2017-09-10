@@ -4,12 +4,25 @@ import (
     "net"
     "fmt"
     "log"
-    "bufio"
+    "github.com/vmihailenco/msgpack"
 )
 
 const (
     NET_STATUS_LISTENING = iota
 )
+const (
+    FIND_CONTACT_MSG = iota
+    FIND_DATA_MSG
+    STORE_DATA_MSG
+    PING
+    PONG
+)
+
+// msgpack package requires struct variables to use upper case it seems, or (un)marshalling fails
+type NetworkMessage struct {
+    MsgType int
+    Data []byte
+}
 
 type Network struct {
     routing       *RoutingTable
@@ -46,15 +59,18 @@ func (network *Network) Listen() {
     buf := make([]byte, 2048)
     for {
         n, remote_addr, err := network.connection.ReadFromUDP(buf)
-        message := string(buf[:n])
-
+        var msg NetworkMessage
+        err = msgpack.Unmarshal(buf, &msg)
+        if err != nil {
+            log.Fatal(err)
+        }
         switch {
-        case message == "ping":
-            fmt.Printf("%v received %v from %v\n", network.myAddress.String(), message, remote_addr)
+        case msg.MsgType == PING:
+            fmt.Printf("%v received %v from %v\n", network.myAddress.String(), "PING", remote_addr)
             network.routing.AddContact(NewContact(NewKademliaIDRandom(), remote_addr.String())) // TODO ID
             network.RespondPingMessage(network.connection, remote_addr)
         case n > 0:
-            fmt.Printf("%v received %v from %v\n", network.myAddress.String(), message, remote_addr)
+            fmt.Printf("%v received %v from %v\n", network.myAddress.String(), buf[:n], remote_addr)
         case err != nil:
             log.Fatal(err)
         }
@@ -62,32 +78,43 @@ func (network *Network) Listen() {
 }
 
 func (network *Network) RespondPingMessage(conn *net.UDPConn, address *net.UDPAddr) {
-    fmt.Printf("%v sends %v to %v\n", network.myAddress.String(), "pong", address)
-    _, err := conn.WriteToUDP([]byte("pong"), address)
+    fmt.Printf("%v sends %v to %v\n", network.myAddress.String(), "PONG", address)
+    msg, err := msgpack.Marshal(&NetworkMessage{MsgType: PONG})
+    _, err = conn.WriteToUDP(msg, address)
     if err != nil {
-        fmt.Printf("Couldn't send response %v to %v", err, address)
+        fmt.Printf("Error %v sending PONG to %v", err, address)
     }
 }
 
 func (network *Network) SendPingMessage(contact *Contact) bool {
-    conn, err := net.Dial("udp", contact.Address)
+    if contact.Address == network.myAddress.String() {
+        // Node pinged itself
+        return true
+    }
+    connection, err := net.Dial("udp", contact.Address)
     if err != nil {
         fmt.Printf("Error %v dialing contact %v\n", err, *contact)
         return false
     }
-    defer conn.Close()
-    fmt.Printf("%v sends %v to %v\n", network.myAddress.String(), "ping", contact.Address)
-    fmt.Fprintf(conn, "ping")
+    defer connection.Close()
+    fmt.Printf("%v sends %v to %v\n", network.myAddress.String(), "PING", contact.Address)
+    msg, err := msgpack.Marshal(&NetworkMessage{MsgType: PING})
+    connection.Write(msg)
+    // TODO timeout
     for {
         buf := make([]byte, 2048)
-        n, err := bufio.NewReader(conn).Read(buf)
+        n, err := connection.Read(buf)
         if err != nil {
             fmt.Printf("Error %v listening to %v\n", err, *contact)
             return false
         }
-        message := string(buf[:n])
-        fmt.Printf("%v received %v from %v\n", network.myAddress.String(), message, contact.Address)
-        if message == "pong" {
+        var response NetworkMessage
+        err = msgpack.Unmarshal(buf[:n], &response)
+        if err != nil {
+            log.Fatal(err)
+        }
+        if response.MsgType == PONG {
+            fmt.Printf("%v received %v from %v\n", network.myAddress.String(), "PONG", contact.Address)
             return true
         }
     }
