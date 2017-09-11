@@ -40,6 +40,7 @@ func TestUDPing(t *testing.T) {
             nodesListening++
         }
     }
+    fmt.Printf("%v\n", node1.routing.me.Address)
     // Nodes are now listening to UDP connections
     ping21 := make(chan bool)
     go ping(node2, &node1.routing.me, ping21)
@@ -59,16 +60,20 @@ func TestUDPing(t *testing.T) {
     ping12 := make(chan bool)
     go ping(node1, &node2.routing.me, ping12)
 
-    <-ping21
-    <-ping23
-    <-ping31
-    <-ping32
-    <-ping13
-    <-ping12
-
-    close(node1chan)
-    close(node2chan)
-    close(node3chan)
+    for i := 0; i < 6; i++ {
+        var c bool
+        select {
+        case c = <-ping21:
+        case c = <-ping23:
+        case c = <-ping31:
+        case c = <-ping32:
+        case c = <-ping13:
+        case c = <-ping12:
+        }
+        if c == false {
+            t.Fail()
+        }
+    }
 }
 
 func TestUDPFindContact(t *testing.T) {
@@ -134,17 +139,12 @@ func TestUDPFindContact(t *testing.T) {
 
     closestContacts := make(chan []Contact)
     go func() {
+        // Node1 does not yet have node5 as a contact. Find it.
         closestContacts <- node1.SendFindContactMessage(&node5.routing.me)
     }()
     contacts := <-closestContacts
-    fmt.Printf("%v lookup %v found %v\n", node1.routing.me.Address, node5.routing.me.ID.String() , contacts)
+    fmt.Printf("%v lookup %v found %v\n", node1.routing.me.Address, node5.routing.me.ID.String(), contacts)
     if !contacts[0].ID.Equals(node5.routing.me.ID) {
         t.Fail()
     }
-    close(closestContacts)
-
-    close(node1chan)
-    close(node2chan)
-    close(node3chan)
-    close(node4chan)
 }
