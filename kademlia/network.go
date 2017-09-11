@@ -8,7 +8,7 @@ import (
     "reflect"
 )
 
-const ALPHA = 4
+const ALPHA = 3
 const (
     NET_STATUS_LISTENING = iota
 )
@@ -30,10 +30,10 @@ type NetworkMessage struct {
 }
 
 type Network struct {
-    routing       *RoutingTable
-    myAddress     net.UDPAddr
+    routing   *RoutingTable
+    myAddress net.UDPAddr
     // Listening connection
-    connection    *net.UDPConn
+    connection *net.UDPConn
     // Channel for telling when node started listening
     statusChannel *chan int
 }
@@ -177,6 +177,7 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
     return false
 }
 
+// From https://stackoverflow.com/a/17825055
 func (network *Network) callSendReceiveOnChannel(msg *NetworkMessage, contact *Contact, ch chan *NetworkMessage) int {
     set := []reflect.SelectCase{}
     set = append(set, reflect.SelectCase{
@@ -229,8 +230,9 @@ func (network *Network) SendFindContactMessage(contactToFind *Contact) []Contact
     // Marshal the Contact to find for later sending
     contactToFindMsg, err := msgpack.Marshal(*contactToFind)
     if err != nil {
-        log.Fatal(err)
+        log.Printf("%v Could not marshal contact: %v\n", network.routing.me, err)
     }
+
     msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.routing.me, RpcID: *NewKademliaIDRandom(), Data: contactToFindMsg}
 
     // Find the alpha closest node
@@ -246,7 +248,7 @@ func (network *Network) SendFindContactMessage(contactToFind *Contact) []Contact
     nodesVisited := NewRoutingTable(network.routing.me)
     // How many nodes we have queried so far
     numNodesVisited := 0
-    // Mutex
+    // Mutex http://www.golangpatterns.info/concurrency/semaphores
     m1 := make(chan struct{}, 1)
     m2 := make(chan struct{}, 1)
 
@@ -271,20 +273,19 @@ func (network *Network) SendFindContactMessage(contactToFind *Contact) []Contact
                 var newContacts []Contact
                 err := msgpack.Unmarshal(response.Data, &newContacts)
                 if err != nil {
-                    log.Fatal(err)
+                    log.Printf("%v Could not unmarshal contact array: %v\n", network.routing.me, err)
+                    continue
                 }
                 toVisit := []Contact{}
                 // Check if we have already visited these contacts. If not, queue them for future visits. Populate the routing table also.
                 m2 <- struct{}{}
-                network.routing.AddContact(response.Origin)
                 for i := 0; i < min(ALPHA, len(newContacts)); i++ {
                     newContact := newContacts[i]
                     if !nodesVisited.Contains(newContact) && !network.routing.me.ID.Equals(newContact.ID) && numNodesVisited < bucketSize {
-                        network.routing.AddContact(newContact)
                         nodesVisited.AddContact(newContact)
-                        fmt.Printf("%v new contact from %v: %v\n", network.myAddress.String(), response.Origin.Address, newContact.String())
                         toVisit = append(toVisit, newContact)
                         numNodesVisited++
+                        fmt.Printf("%v new contact from %v: %v\n", network.myAddress.String(), response.Origin.Address, newContact.String())
                     }
                 }
                 // TODO: Keep looking on the rest of the nodes (up to k) if no new nodes were found
