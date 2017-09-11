@@ -124,7 +124,6 @@ func (network *Network) SendMessageToConnection(message *NetworkMessage, address
     if err != nil {
         fmt.Printf("%v WriteToUDP failed with %v\n", network.routing.me.Address, err)
     }
-
 }
 
 // Send a message over a new connection
@@ -177,60 +176,12 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
     return false
 }
 
-// From https://stackoverflow.com/a/17825055
-func (network *Network) callSendReceiveOnChannel(msg *NetworkMessage, contact *Contact, ch chan *NetworkMessage) int {
-    set := []reflect.SelectCase{}
-    set = append(set, reflect.SelectCase{
-        Dir:  reflect.SelectSend,
-        Chan: reflect.ValueOf(ch),
-        Send: reflect.ValueOf(network.SendReceiveMessage(msg, contact)),
-    })
-    to, _, _ := reflect.Select(set)
-    return to
-}
-
-func readSendReceiveOnChannels(chs []chan *NetworkMessage) (val *NetworkMessage, from int) {
-    set := []reflect.SelectCase{}
-    for _, ch := range chs {
-        set = append(set, reflect.SelectCase{
-            Dir:  reflect.SelectRecv,
-            Chan: reflect.ValueOf(ch),
-        })
-    }
-    from, valValue, _ := reflect.Select(set)
-    val = valValue.Interface().(*NetworkMessage)
-    return
-}
-
-func callContactFunctionOnChannel(fun func(closestContacts []Contact) []Contact, input []Contact, ch chan []Contact) int {
-    set := []reflect.SelectCase{}
-    set = append(set, reflect.SelectCase{
-        Dir:  reflect.SelectSend,
-        Chan: reflect.ValueOf(ch),
-        Send: reflect.ValueOf(fun(input)),
-    })
-    to, _, _ := reflect.Select(set)
-    return to
-}
-
-func readContactFunctionOnChannels(chs []chan []Contact) (val []Contact, from int) {
-    set := []reflect.SelectCase{}
-    for _, ch := range chs {
-        set = append(set, reflect.SelectCase{
-            Dir:  reflect.SelectRecv,
-            Chan: reflect.ValueOf(ch),
-        })
-    }
-    from, valValue, _ := reflect.Select(set)
-    val = valValue.Interface().([]Contact)
-    return
-}
-
-func (network *Network) SendFindContactMessage(contactToFind *Contact) []Contact {
+func (network *Network) SendFindContactMessage(contactToFind *Contact) ([]Contact) {
     // Marshal the Contact to find for later sending
     contactToFindMsg, err := msgpack.Marshal(*contactToFind)
     if err != nil {
         log.Printf("%v Could not marshal contact: %v\n", network.routing.me, err)
+        return nil
     }
 
     msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.routing.me, RpcID: *NewKademliaIDRandom(), Data: contactToFindMsg}
@@ -257,16 +208,36 @@ func (network *Network) SendFindContactMessage(contactToFind *Contact) []Contact
         // Send queries to the closest contacts
         m1 <- struct{}{}
         for i := range closestContacts {
-            go network.callSendReceiveOnChannel(&msg, &closestContacts[i], sendChannels[chanIndex])
+            //go network.callSendReceiveOnChannel(&msg, &closestContacts[i], sendChannels[chanIndex])
+            go func(msg *NetworkMessage, contact *Contact, ch chan *NetworkMessage) int {
+                set := []reflect.SelectCase{}
+                set = append(set, reflect.SelectCase{
+                    Dir:  reflect.SelectSend,
+                    Chan: reflect.ValueOf(ch),
+                    Send: reflect.ValueOf(network.SendReceiveMessage(msg, contact)),
+                })
+                to, _, _ := reflect.Select(set)
+                return to
+            }(&msg, &closestContacts[i], sendChannels[chanIndex])
             chanIndex++
         }
         <-m1
         // Channels to recursive calls
-        rChannels := []chan []Contact{}
+        callChannels := []chan []Contact{}
         // There are as many query channels as closest contacts
         for i := 0; i < len(closestContacts); i++ {
             // Block until we get one or more responses from RPCs
-            response, _ := readSendReceiveOnChannels(sendChannels)
+            //response, _ := readSendReceiveOnChannels(sendChannels)
+            set := []reflect.SelectCase{}
+            for _, ch := range sendChannels {
+                set = append(set, reflect.SelectCase{
+                    Dir:  reflect.SelectRecv,
+                    Chan: reflect.ValueOf(ch),
+                })
+            }
+            _, valValue, _ := reflect.Select(set)
+            response := valValue.Interface().(*NetworkMessage)
+
             if response.MsgType == FIND_CONTACT_MSG && response.RpcID.Equals(&msg.RpcID) {
                 fmt.Printf("%v received from %v: %v \n", network.myAddress.String(), response.Origin.Address, response.String())
                 // Unmarshal the contacts we got back
@@ -288,20 +259,39 @@ func (network *Network) SendFindContactMessage(contactToFind *Contact) []Contact
                         fmt.Printf("%v new contact from %v: %v\n", network.myAddress.String(), response.Origin.Address, newContact.String())
                     }
                 }
-                // TODO: Keep looking on the rest of the nodes (up to k) if no new nodes were found
                 // If there were any new nodes, visit them now
                 if len(toVisit) > 0 {
-                    rChannel := make(chan []Contact)
-                    rChannels = append(rChannels, rChannel)
-                    go callContactFunctionOnChannel(lookup, toVisit, rChannel)
+                    callChannel := make(chan []Contact)
+                    callChannels = append(callChannels, callChannel)
+
+                    go func(fun func(c []Contact) []Contact, input []Contact, ch chan []Contact) int {
+                        set := []reflect.SelectCase{}
+                        set = append(set, reflect.SelectCase{
+                            Dir:  reflect.SelectSend,
+                            Chan: reflect.ValueOf(ch),
+                            Send: reflect.ValueOf(fun(input)),
+                        })
+                        to, _, _ := reflect.Select(set)
+                        return to
+                    }(lookup, toVisit, callChannel)
+
                 }
                 <-m2
             }
         }
         // Gather results from all the recursive calls we made and return them
         allContacts := []Contact{}
-        for i := 0; i < len(rChannels); i++ {
-            newContacts, _ := readContactFunctionOnChannels(rChannels)
+        for i := 0; i < len(callChannels); i++ {
+            set := []reflect.SelectCase{}
+            for _, ch := range callChannels {
+                set = append(set, reflect.SelectCase{
+                    Dir:  reflect.SelectRecv,
+                    Chan: reflect.ValueOf(ch),
+                })
+            }
+            _, valValue, _ := reflect.Select(set)
+            newContacts := valValue.Interface().([]Contact)
+
             for _, newContact := range newContacts {
                 allContacts = append(allContacts, newContact)
             }
@@ -314,7 +304,8 @@ func (network *Network) SendFindContactMessage(contactToFind *Contact) []Contact
     }
     // Block on the initial call to the recursive lookup
     lookup(closestContacts)
-    closestContacts = network.routing.FindClosestContacts(contactToFind.ID, bucketSize)
+    // The temporary routing table will contain the closest contacts found during lookup
+    closestContacts = nodesVisited.FindClosestContacts(contactToFind.ID, bucketSize)
     for _, channel := range sendChannels {
         close(channel)
     }

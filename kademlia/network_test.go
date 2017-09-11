@@ -137,10 +137,9 @@ func TestUDPFindContact(t *testing.T) {
         closestContacts <- node1.SendFindContactMessage(&node5.routing.me)
     }()
     contacts := <-closestContacts
+    fmt.Printf("%v lookup %v found %v\n", node1.routing.me.Address, node5.routing.me.ID.String() , contacts)
     if !contacts[0].ID.Equals(node5.routing.me.ID) {
         t.Fail()
-    } else {
-        fmt.Printf("%v found %v\n", node1.routing.me.Address , contacts[0].String())
     }
     close(closestContacts)
 
