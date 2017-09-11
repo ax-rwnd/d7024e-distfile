@@ -5,6 +5,7 @@ import (
     "github.com/takama/daemon"
     "os"
     "syscall"
+    "../share"
     )
 
 var dependencies = []string{"dummy.service"}
@@ -12,7 +13,7 @@ type Service struct {
     daemon.Daemon
 }
 
-func runDaemon() {
+func runDaemon(config *daemonConfig) {
     srv, err := daemon.New("kademliad", "Kademlia Storage Daemon", dependencies...)
     if err != nil {
         errlog.Println("Error: ", err)
@@ -21,7 +22,7 @@ func runDaemon() {
 
     service := &Service{srv}
     stdlog.Println("Starting kademlia storage node.")
-    if status, err := service.Manage(); err != nil {
+    if status, err := service.Manage(config); err != nil {
         errlog.Println("Error: ", err)
         os.Exit(1)
     } else {
@@ -29,7 +30,7 @@ func runDaemon() {
     }
 }
 
-func (service *Service) Manage() (string, error) {
+func (service *Service) Manage(config *daemonConfig) (string, error) {
     if len(os.Args) > 1 {
         command := os.Args[1]
         switch command {
@@ -50,6 +51,11 @@ func (service *Service) Manage() (string, error) {
 
    interrupt := make(chan os.Signal, 1)
    signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
+
+   messages := make(chan share.Message, 64)
+   go Translate (messages, config)
+   go RESTServer (messages, config)
+   go RPCServer (messages, config)
 
     for {
        select {

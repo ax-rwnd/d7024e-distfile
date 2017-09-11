@@ -29,5 +29,5 @@ func main() {
         os.Exit(1)
     }
 
-    runDaemon()
+    runDaemon(&config)
 }
