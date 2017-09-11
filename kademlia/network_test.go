@@ -10,37 +10,15 @@ func ping(sender *Network, receiver *Contact, c chan bool) {
 }
 
 func TestUDPing(t *testing.T) {
-    var node1 *Network
-    var node2 *Network
-    var node3 *Network
-
-    node1chan := make(chan int)
-    node2chan := make(chan int)
-    node3chan := make(chan int)
-
-    go func() {
-        node1 = NewNetwork("127.0.0.1", 8000, &node1chan)
-    }()
-    go func() {
-        node2 = NewNetwork("127.0.0.1", 8001, &node2chan)
-    }()
-    go func() {
-        node3 = NewNetwork("127.0.0.1", 8002, &node3chan)
-    }()
-
-    nodesListening := 0
-    for nodesListening < 3 {
-        var c int
-        select {
-        case c = <-node1chan:
-        case c = <-node2chan:
-        case c = <-node3chan:
-        }
-        if c == NET_STATUS_LISTENING {
-            nodesListening++
-        }
-    }
-    fmt.Printf("%v\n", node1.routing.me.Address)
+    node1c := make(chan *Network)
+    node2c := make(chan *Network)
+    node3c := make(chan *Network)
+    NewNetwork(&node1c, "127.0.0.1", 8000)
+    NewNetwork(&node2c, "127.0.0.1", 8001)
+    NewNetwork(&node3c, "127.0.0.1", 8002)
+    node1 := <-node1c
+    node2 := <-node2c
+    node3 := <-node3c
     // Nodes are now listening to UDP connections
     ping21 := make(chan bool)
     go ping(node2, &node1.routing.me, ping21)
@@ -60,6 +38,7 @@ func TestUDPing(t *testing.T) {
     ping12 := make(chan bool)
     go ping(node1, &node2.routing.me, ping12)
 
+    // If any node did not respond to ping, fail the test
     for i := 0; i < 6; i++ {
         var c bool
         select {
@@ -76,75 +55,75 @@ func TestUDPing(t *testing.T) {
     }
 }
 
+func TestSendReceiveMessage(t *testing.T) {
+    node1c := make(chan *Network)
+    node2c := make(chan *Network)
+    NewNetwork(&node1c, "127.0.0.1", 8100)
+    NewNetwork(&node2c, "127.0.0.1", 8101)
+    node1 := <-node1c
+    node2 := <-node2c
+    msg := &NetworkMessage{MsgType: PING, Origin: node1.routing.me, RpcID: *NewKademliaIDRandom()}
+    response := node1.SendReceiveMessage(msg, &node2.routing.me)
+    if response.MsgType != PONG || !response.RpcID.Equals(&msg.RpcID) || !response.Origin.ID.Equals(node2.routing.me.ID) {
+        t.Fail()
+    }
+}
+
+func TestSendReceiveMessageTimeout(t *testing.T) {
+    node1c := make(chan *Network)
+    node2c := make(chan *Network)
+    NewNetwork(&node1c, "127.0.0.1", 8200)
+    NewNetwork(&node2c, "127.0.0.1", 8201)
+    node1 := <-node1c
+    node2 := <-node2c
+    msg := &NetworkMessage{MsgType: PONG, Origin: node1.routing.me, RpcID: *NewKademliaIDRandom()}
+    response := node1.SendReceiveMessage(msg, &node2.routing.me)
+    if response != nil {
+        fmt.Printf("%v\n", response.String())
+        t.Fail()
+    }
+}
+
 func TestUDPFindContact(t *testing.T) {
-    var node1 *Network
-    var node2 *Network
-    var node3 *Network
-    var node4 *Network
-    var node5 *Network
-
-    node1chan := make(chan int)
-    node2chan := make(chan int)
-    node3chan := make(chan int)
-    node4chan := make(chan int)
-    node5chan := make(chan int)
-
-    go func() {
-        node1 = NewNetwork("127.0.0.1", 9000, &node1chan)
-    }()
-    go func() {
-        node2 = NewNetwork("127.0.0.1", 9001, &node2chan)
-    }()
-    go func() {
-        node3 = NewNetwork("127.0.0.1", 9002, &node3chan)
-    }()
-    go func() {
-        node4 = NewNetwork("127.0.0.1", 9003, &node4chan)
-    }()
-    go func() {
-        node5 = NewNetwork("127.0.0.1", 9004, &node5chan)
-    }()
-    nodesListening := 0
-    for nodesListening < 5 {
-        var c int
-        select {
-        case c = <-node1chan:
-        case c = <-node2chan:
-        case c = <-node3chan:
-        case c = <-node4chan:
-        case c = <-node5chan:
-        }
-        if c == NET_STATUS_LISTENING {
-            nodesListening++
+    // Create nodes array and double link contact information between them.
+    // This means for more nodes than bucketSize+1 this test will fail
+    const numNodes = bucketSize + 1
+    var nodeChans [numNodes]chan *Network
+    var nodes [numNodes] *Network
+    for i := range nodeChans {
+        nodeChans[i] = make(chan *Network)
+        NewNetwork(&nodeChans[i], "127.0.0.1", 8300+i)
+        nodes[i] = <-nodeChans[i] // Node is now listening to UDP connections
+    }
+    fmt.Printf("looking up %v\n", nodes[numNodes-1].routing.me.String())
+    // Add some contacts between them
+    for i := range nodeChans {
+        if i == 0 {
+            nodes[0].routing.AddContact(nodes[1].routing.me)
+        } else if i == numNodes-1 {
+            nodes[numNodes-1].routing.AddContact(nodes[numNodes-2].routing.me)
+        } else {
+            nodes[i].routing.AddContact(nodes[i-1].routing.me)
+            nodes[i].routing.AddContact(nodes[i+1].routing.me)
         }
     }
-    // Nodes are now listening to UDP connections
-    fmt.Printf("Network %v <-> %v <-> %v <-> %v <-> %v\n",
-        node1.routing.me.String(),
-        node2.routing.me.String(),
-        node3.routing.me.String(),
-        node4.routing.me.String(),
-        node5.routing.me.String())
-
-    node1.routing.AddContact(node2.routing.me)
-    node1.routing.AddContact(node3.routing.me)
-    node2.routing.AddContact(node1.routing.me)
-    node2.routing.AddContact(node3.routing.me)
-    node3.routing.AddContact(node2.routing.me)
-    node3.routing.AddContact(node4.routing.me)
-    node4.routing.AddContact(node3.routing.me)
-    node4.routing.AddContact(node5.routing.me)
-    node5.routing.AddContact(node4.routing.me)
-    fmt.Printf("looking up %v\n", node5.routing.me.String())
-
-    closestContacts := make(chan []Contact)
+    var cc = []chan []Contact{make(chan []Contact), make(chan []Contact),}
+    // First node does not yet have last node as a contact. Find it.
     go func() {
-        // Node1 does not yet have node5 as a contact. Find it.
-        closestContacts <- node1.SendFindContactMessage(&node5.routing.me)
+        cc[0] <- nodes[0].SendFindContactMessage(&nodes[numNodes-1].routing.me)
     }()
-    contacts := <-closestContacts
-    fmt.Printf("%v lookup %v found %v\n", node1.routing.me.Address, node5.routing.me.ID.String(), contacts)
-    if !contacts[0].ID.Equals(node5.routing.me.ID) {
+    // Try the reverse concurrently
+    go func() {
+        cc[1] <- nodes[numNodes-1].SendFindContactMessage(&nodes[0].routing.me)
+    }()
+    contacts1 := <-cc[0]
+    contacts2 := <-cc[1]
+    fmt.Printf("%v lookup %v found %v\n", nodes[0].routing.me.Address, nodes[numNodes-1].routing.me.ID.String(), contacts1)
+    fmt.Printf("%v lookup %v found %v\n", nodes[numNodes-1].routing.me.Address, nodes[0].routing.me.ID.String(), contacts2)
+    if !contacts1[0].ID.Equals(nodes[numNodes-1].routing.me.ID) {
+        t.Fail()
+    }
+    if !contacts2[0].ID.Equals(nodes[0].routing.me.ID) {
         t.Fail()
     }
 }

@@ -11,6 +11,7 @@ import (
 
 const ALPHA = 3
 const CONNECTION_TIMEOUT = time.Second * 2
+const CONNECTION_RETRY_DELAY = time.Second / 2
 const (
     NET_STATUS_LISTENING = iota
 )
@@ -37,7 +38,7 @@ type Network struct {
     // Listening connection
     connection *net.UDPConn
     // Channel for telling when node started listening
-    statusChannel *chan int
+    statusChannel *chan *Network
 }
 
 func (msg *NetworkMessage) String() string {
@@ -51,7 +52,7 @@ func min(a, b int) int {
     return b
 }
 
-func NewNetwork(ip string, port int, statusChannel *chan int) *Network {
+func NewNetwork(statusChannel *chan *Network, ip string, port int) *Network {
     network := new(Network)
     network.myAddress.IP = net.ParseIP(ip)
     if network.myAddress.IP == nil {
@@ -66,6 +67,7 @@ func NewNetwork(ip string, port int, statusChannel *chan int) *Network {
     return network
 }
 
+// Listen for incoming UDP connections, until network.statusChannel is closed
 func (network *Network) Listen() {
     var err error
     network.connection, err = net.ListenUDP("udp", &network.myAddress)
@@ -74,7 +76,7 @@ func (network *Network) Listen() {
         log.Fatal(err)
     }
     // Message that node is now listening
-    *network.statusChannel <- NET_STATUS_LISTENING
+    *network.statusChannel <- network
 
     defer network.connection.Close()
 
@@ -88,13 +90,13 @@ func (network *Network) Listen() {
             log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
             continue
         }
-        // Store the contact that just messaged the node
-        contact := NewContact(message.Origin.ID, remote_addr.String())
-        network.routing.AddContact(contact) // TODO mutex lock
+        // Store the contact that just messaged the node TODO mutex lock
+        //contact := NewContact(message.Origin.ID, remote_addr.String())
+        //network.routing.AddContact(contact)
+
         fmt.Printf("%v received from %v: %v \n", network.myAddress.String(), remote_addr, message.String())
 
         switch {
-        case message.MsgType == PONG:
         case message.MsgType == PING:
             // Respond to the ping
             msg := NetworkMessage{MsgType: PONG, Origin: network.routing.me, RpcID: message.RpcID}
@@ -128,7 +130,7 @@ func (network *Network) Listen() {
     }
 }
 
-// Send a message over an established connection
+// Send a message over an established UDP connection
 func (network *Network) SendMessageToConnection(message *NetworkMessage, address *net.UDPAddr, conn *net.UDPConn) {
     fmt.Printf("%v responds to %v: %v \n", network.myAddress.String(), address, message.String())
     msg, err := msgpack.Marshal(message)
@@ -141,7 +143,7 @@ func (network *Network) SendMessageToConnection(message *NetworkMessage, address
     }
 }
 
-// Send a message over a new connection
+// Send a one-way message
 func (network *Network) SendMessage(message *NetworkMessage, contact *Contact) (net.Conn, error) {
     connection, err := net.Dial("udp", contact.Address)
     if err != nil {
@@ -154,7 +156,7 @@ func (network *Network) SendMessage(message *NetworkMessage, contact *Contact) (
     return connection, nil
 }
 
-// Send and block until reply
+// Send, then block until reply or timeout
 func (network *Network) SendReceiveMessage(message *NetworkMessage, contact *Contact) *NetworkMessage {
     connection, err := network.SendMessage(message, contact)
     if err != nil {
@@ -166,23 +168,24 @@ func (network *Network) SendReceiveMessage(message *NetworkMessage, contact *Con
     go func(m chan *NetworkMessage) {
         for {
             buf := make([]byte, RECEIVE_BUFFER_SIZE)
-            n, err := connection.Read(buf)
-            if err != nil {
+            for {
+                n, err := connection.Read(buf)
+                if err != nil {
+                    timeout := time.NewTimer(CONNECTION_RETRY_DELAY)
+                    <-timeout.C
+                    continue
+                }
+                var responseMsg NetworkMessage
+                err = msgpack.Unmarshal(buf[:n], &responseMsg)
                 timer.Stop()
-                log.Printf("%v read UDP failed from %v: %v\n", network.routing.me.Address, contact.Address, err)
-                m <- nil
+                if err != nil {
+                    log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, contact.Address, err)
+                    m <- nil
+                    return
+                }
+                m <- &responseMsg
                 return
             }
-            var responseMsg NetworkMessage
-            err = msgpack.Unmarshal(buf[:n], &responseMsg)
-            timer.Stop()
-            if err != nil {
-                log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, contact.Address, err)
-                m <- nil
-                return
-            }
-            m <- &responseMsg
-            return
         }
     }(channel)
     select {
