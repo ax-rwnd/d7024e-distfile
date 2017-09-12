@@ -3,6 +3,9 @@ package kademlia
 import (
     "fmt"
     "sort"
+    "strings"
+    "strconv"
+    "errors"
 )
 
 type Contact struct {
@@ -57,4 +60,18 @@ func (candidates *ContactCandidates) Less(i, j int) bool {
 
 func (contact *Contact) Equals(target *Contact) bool {
     return contact.ID.Equals(target.ID) && contact.Address == target.Address
+}
+
+func (contact *Contact) ParseAddress() (ip string, port int, err error) {
+    err = errors.New(fmt.Sprintf("%v Error parsing address\n", contact.Address))
+    split := strings.Split(contact.Address, ":")
+    if len(split) == 2 {
+        var p int64
+        p, err = strconv.ParseInt(split[1], 10, 32)
+        if err == nil {
+            ip = split[0]
+            port = int(p)
+        }
+    }
+    return ip, port, err
 }
