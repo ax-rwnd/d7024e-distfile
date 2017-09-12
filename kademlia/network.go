@@ -6,15 +6,11 @@ import (
     "fmt"
     "log"
     "github.com/vmihailenco/msgpack"
-    "reflect"
 )
 
 const ALPHA = 3
 const CONNECTION_TIMEOUT = time.Second * 2
 const CONNECTION_RETRY_DELAY = time.Second / 2
-const (
-    NET_STATUS_LISTENING = iota
-)
 const (
     FIND_CONTACT_MSG = iota
     FIND_DATA_MSG
@@ -38,7 +34,7 @@ type Network struct {
     // Listening connection
     connection *net.UDPConn
     // Channel for telling when node started listening
-    statusChannel *chan *Network
+    networkChannel *chan *Network
 }
 
 func (msg *NetworkMessage) String() string {
@@ -52,7 +48,7 @@ func min(a, b int) int {
     return b
 }
 
-func NewNetwork(statusChannel *chan *Network, ip string, port int) *Network {
+func NewNetwork(networkChannel *chan *Network, ip string, port int) {
     network := new(Network)
     network.myAddress.IP = net.ParseIP(ip)
     if network.myAddress.IP == nil {
@@ -61,13 +57,12 @@ func NewNetwork(statusChannel *chan *Network, ip string, port int) *Network {
     network.myAddress.Port = port
     // Random ID on network start
     network.routing = NewRoutingTable(NewContact(NewKademliaIDRandom(), network.myAddress.String()))
-    network.statusChannel = statusChannel
+    network.networkChannel = networkChannel
     // Start listening to UDP socket
     go network.Listen()
-    return network
 }
 
-// Listen for incoming UDP connections, until network.statusChannel is closed
+// Listen for incoming UDP connections, until network.networkChannel is closed
 func (network *Network) Listen() {
     var err error
     network.connection, err = net.ListenUDP("udp", &network.myAddress)
@@ -76,7 +71,7 @@ func (network *Network) Listen() {
         log.Fatal(err)
     }
     // Message that node is now listening
-    *network.statusChannel <- network
+    *network.networkChannel <- network
 
     defer network.connection.Close()
 
@@ -156,7 +151,7 @@ func (network *Network) SendMessage(message *NetworkMessage, contact *Contact) (
     return connection, nil
 }
 
-// Send, then block until reply or timeout
+// Send over UDP, then block until response or timeout
 func (network *Network) SendReceiveMessage(message *NetworkMessage, contact *Contact) *NetworkMessage {
     connection, err := network.SendMessage(message, contact)
     if err != nil {
@@ -217,136 +212,36 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
     return false
 }
 
-func (network *Network) SendFindContactMessage(contactToFind *Contact) ([]Contact) {
-    // Marshal the Contact to find for later sending
-    contactToFindMsg, err := msgpack.Marshal(*contactToFind)
+// Send a Find Node message over UDP. Blocks until response or timeout.
+func (network *Network) SendFindContactMessage(findTarget *Contact, receiver *Contact) ([]Contact) {
+    // Marshal the contact and store it in Data byte array later
+    contactToFindMsg, err := msgpack.Marshal(*findTarget)
     if err != nil {
         log.Printf("%v Could not marshal contact: %v\n", network.routing.me, err)
         return nil
     }
-    // Find the alpha closest nodes
-    closestContacts := network.routing.FindClosestContacts(contactToFind.ID, ALPHA)
-    // How many nodes we have queried so far
-    numNodesVisited := 0
-    // This holds the nodes we have already queried
-    nodesVisited := NewRoutingTable(network.routing.me)
-    for _, contact := range closestContacts {
-        nodesVisited.AddContact(contact)
-        numNodesVisited++
+    // Unique id for this RPC
+    rpcID := *NewKademliaIDRandom()
+    msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.routing.me, RpcID: rpcID, Data: contactToFindMsg}
+    // Blocks until response
+    response := network.SendReceiveMessage(&msg, receiver)
+    // Validate the response
+    if response != nil && response.MsgType == FIND_CONTACT_MSG {
+        if !response.RpcID.Equals(&rpcID) {
+            log.Printf("%v wrong RPC header from %v: %v should be %v\n", network.routing.me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
+        }
+        fmt.Printf("%v received from %v: %v \n", network.routing.me.Address, response.Origin.Address, response.String())
+        // Unmarshal the contacts we got back
+        var newContacts []Contact
+        err := msgpack.Unmarshal(response.Data, &newContacts)
+        if err != nil {
+            log.Printf("%v Could not unmarshal contact array: %v\n", network.routing.me, err)
+        }
+        return newContacts
+    } else {
+        log.Printf("%v received UNKNOWN %v: %v \n", network.routing.me.Address, response.Origin.Address, response.String())
     }
-    // Mutex http://www.golangpatterns.info/concurrency/semaphores
-    mut := make(chan struct{}, 1)
-
-    var lookup func(closestContacts []Contact) []Contact
-    lookup = func(closestContacts []Contact) []Contact {
-        // Channels for sending/receiving network messages
-        rpcChannels := []chan *NetworkMessage{}
-        rpcIDs := []KademliaID{}
-        for i := 0; i < len(closestContacts); i++ {
-            rpcChannels = append(rpcChannels, make(chan *NetworkMessage))
-            rpcIDs = append(rpcIDs, *NewKademliaIDRandom())
-        }
-        // Send go routine RPCs to the closest contacts, connect to channels
-        for i := range closestContacts {
-            msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.routing.me, RpcID: rpcIDs[i], Data: contactToFindMsg}
-            go func(msg *NetworkMessage, contact *Contact, chanIndex chan *NetworkMessage) int {
-                set := []reflect.SelectCase{reflect.SelectCase{
-                    Dir:  reflect.SelectSend,
-                    Chan: reflect.ValueOf(chanIndex),
-                    Send: reflect.ValueOf(network.SendReceiveMessage(msg, contact)),
-                }}
-                to, _, _ := reflect.Select(set)
-                return to
-            }(&msg, &closestContacts[i], rpcChannels[i])
-        }
-        // Channels to recursive lookup calls
-        lookupChannels := []chan []Contact{}
-        // There are as many RPC channels as closest contacts
-        for i := 0; i < len(closestContacts); i++ {
-            // Block until we get one or more responses from RPCs
-            set := []reflect.SelectCase{}
-            for _, ch := range rpcChannels {
-                set = append(set, reflect.SelectCase{
-                    Dir:  reflect.SelectRecv,
-                    Chan: reflect.ValueOf(ch),
-                })
-            }
-            chIdx, valValue, _ := reflect.Select(set)
-            response := valValue.Interface().(*NetworkMessage)
-
-            // Check if the response is valid
-            if response == nil {
-                // UDP connection/read/write failed, or timed out
-                continue
-
-            } else if response.MsgType == FIND_CONTACT_MSG {
-                if !response.RpcID.Equals(&rpcIDs[chIdx]) {
-                    log.Printf("%v wrong RPC header from %v: %v should be %v\n", network.myAddress.String(), response.Origin.Address, response.RpcID.String(), rpcIDs[chIdx])
-                }
-                fmt.Printf("%v received from %v: %v \n", network.myAddress.String(), response.Origin.Address, response.String())
-                // Unmarshal the contacts we got back
-                var newContacts []Contact
-                err := msgpack.Unmarshal(response.Data, &newContacts)
-                if err != nil {
-                    log.Printf("%v Could not unmarshal contact array: %v\n", network.routing.me, err)
-                    continue
-                }
-                nodesToVisit := []Contact{}
-                // Check if we have already visited these contacts. If not, queue them for future visits.
-                for i := 0; i < min(ALPHA, len(newContacts)); i++ {
-                    newContact := newContacts[i]
-                    // Mutex lock here to synchronize shared variables
-                    mut <- struct{}{}
-                    if !nodesVisited.Contains(newContact) && !network.routing.me.ID.Equals(newContact.ID) && numNodesVisited < bucketSize {
-                        nodesToVisit = append(nodesToVisit, newContact)
-                        nodesVisited.AddContact(newContact)
-                        numNodesVisited++
-                        fmt.Printf("%v new contact from %v: %v\n", network.myAddress.String(), response.Origin.Address, newContact.String())
-                    }
-                    <-mut
-                }
-                // If there were any new nodes, visit them now
-                if len(nodesToVisit) > 0 {
-                    callChannel := make(chan []Contact)
-                    lookupChannels = append(lookupChannels, callChannel)
-
-                    // Make new recursive lookup calls and store the channels
-                    go func(fun func(c []Contact) []Contact, input []Contact, ch chan []Contact) int {
-                        set := []reflect.SelectCase{}
-                        set = append(set, reflect.SelectCase{
-                            Dir:  reflect.SelectSend,
-                            Chan: reflect.ValueOf(ch),
-                            Send: reflect.ValueOf(fun(input)),
-                        })
-                        to, _, _ := reflect.Select(set)
-                        return to
-                    }(lookup, nodesToVisit, callChannel)
-                }
-            } else {
-                log.Printf("%v received UNKNOWN %v: %v \n", network.myAddress.String(), response.Origin.Address, response.String())
-            }
-        }
-        // Gather results from all the recursive calls we made and return them
-        allContacts := []Contact{}
-        for i := 0; i < len(lookupChannels); i++ {
-            set := []reflect.SelectCase{}
-            for _, ch := range lookupChannels {
-                set = append(set, reflect.SelectCase{
-                    Dir:  reflect.SelectRecv,
-                    Chan: reflect.ValueOf(ch),
-                })
-            }
-            _, valValue, _ := reflect.Select(set)
-            for _, newContact := range valValue.Interface().([]Contact) {
-                allContacts = append(allContacts, newContact)
-            }
-        }
-        return allContacts
-    }
-    // Block on the initial call to the recursive lookup
-    lookup(closestContacts)
-    // The temporary routing table will contain the closest contacts found during lookup
-    return nodesVisited.FindClosestContacts(contactToFind.ID, bucketSize)
+    return []Contact{}
 }
 
 func (network *Network) SendFindDataMessage(hash string) {
