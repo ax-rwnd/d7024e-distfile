@@ -62,6 +62,7 @@ func TestSendReceiveMessage(t *testing.T) {
     NewNetwork(&node2c, "127.0.0.1", 8101)
     node1 := <-node1c
     node2 := <-node2c
+    // This message must get the correct response
     msg := &NetworkMessage{MsgType: PING, Origin: node1.routing.me, RpcID: *NewKademliaIDRandom()}
     response := node1.SendReceiveMessage(msg, &node2.routing.me)
     if response.MsgType != PONG || !response.RpcID.Equals(&msg.RpcID) || !response.Origin.ID.Equals(node2.routing.me.ID) {
@@ -76,6 +77,7 @@ func TestSendReceiveMessageTimeout(t *testing.T) {
     NewNetwork(&node2c, "127.0.0.1", 8201)
     node1 := <-node1c
     node2 := <-node2c
+    // This message should not get a response, so node1 should timeout when listening
     msg := &NetworkMessage{MsgType: PONG, Origin: node1.routing.me, RpcID: *NewKademliaIDRandom()}
     response := node1.SendReceiveMessage(msg, &node2.routing.me)
     if response != nil {
@@ -85,5 +87,20 @@ func TestSendReceiveMessageTimeout(t *testing.T) {
 }
 
 func TestSendFindContactMessage(t *testing.T) {
-    // TODO: Used in kademlia_test.go, but more tests would be good
+    node1c := make(chan *Network)
+    node2c := make(chan *Network)
+    NewNetwork(&node1c, "127.0.0.1", 8400)
+    NewNetwork(&node2c, "127.0.0.1", 8401)
+    node1 := <-node1c
+    node2 := <-node2c
+    // Do not sort by ID when inputting contacts
+    contact1 := node2.routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000001000000"), "127.0.0.1:8402"))
+    contact2 := node2.routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000001000000000000"), "127.0.0.1:8402"))
+    contact0 := node2.routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "127.0.0.1:8402"))
+    // Send find message
+    contacts := node1.SendFindContactMessage(contact0, &node2.routing.me)
+    // Contacts should be sorted in the response
+    if contacts == nil || !contacts[0].Equals(contact0) || !contacts[1].Equals(contact1) || !contacts[2].Equals(contact2) {
+        t.Fail()
+    }
 }

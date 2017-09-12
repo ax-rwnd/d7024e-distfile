@@ -54,3 +54,7 @@ func (candidates *ContactCandidates) Swap(i, j int) {
 func (candidates *ContactCandidates) Less(i, j int) bool {
     return candidates.contacts[i].Less(&candidates.contacts[j])
 }
+
+func (contact *Contact) Equals(target *Contact) bool {
+    return contact.ID.Equals(target.ID) && contact.Address == target.Address
+}
