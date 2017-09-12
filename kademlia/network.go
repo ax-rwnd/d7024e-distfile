@@ -33,8 +33,6 @@ type Network struct {
     myAddress net.UDPAddr
     // Listening connection
     connection *net.UDPConn
-    // Channel for telling when node started listening
-    networkChannel *chan *Network
 }
 
 func (msg *NetworkMessage) String() string {
@@ -48,7 +46,7 @@ func min(a, b int) int {
     return b
 }
 
-func NewNetwork(networkChannel *chan *Network, ip string, port int) {
+func NewNetwork(ip string, port int) *Network {
     network := new(Network)
     network.myAddress.IP = net.ParseIP(ip)
     if network.myAddress.IP == nil {
@@ -57,13 +55,15 @@ func NewNetwork(networkChannel *chan *Network, ip string, port int) {
     network.myAddress.Port = port
     // Random ID on network start
     network.routing = NewRoutingTable(NewContact(NewKademliaIDRandom(), network.myAddress.String()))
-    network.networkChannel = networkChannel
     // Start listening to UDP socket
-    go network.Listen()
+    listening := make(chan bool)
+    go network.Listen(&listening)
+    <-listening
+    return network
 }
 
 // Listen for incoming UDP connections, until network.networkChannel is closed
-func (network *Network) Listen() {
+func (network *Network) Listen(listening *chan bool) {
     var err error
     network.connection, err = net.ListenUDP("udp", &network.myAddress)
     if err != nil {
@@ -71,7 +71,7 @@ func (network *Network) Listen() {
         log.Fatal(err)
     }
     // Message that node is now listening
-    *network.networkChannel <- network
+    *listening <- true
 
     defer network.connection.Close()
 

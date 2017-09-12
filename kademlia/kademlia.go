@@ -9,19 +9,15 @@ type Kademlia struct {
     network *Network
 }
 
-func NewKademlia(ip string, port int) *Kademlia{
+func NewKademlia(ip string, port int) *Kademlia {
     kademlia := new(Kademlia)
-    networkChannel := make(chan *Network)
-    NewNetwork(&networkChannel, ip, port)
-    kademlia.network = <- networkChannel
-    // Node is now listening to UDP connections
+    kademlia.network = NewNetwork(ip, port)
     return kademlia
 }
 
 func (kademlia *Kademlia) LookupContact(target *Contact) ([]Contact) {
     me := kademlia.network.routing.me;
     myAddress := kademlia.network.myAddress
-    // Marshal the Contact to find for later sending
 
     // Find the alpha closest nodes
     closestContacts := kademlia.network.routing.FindClosestContacts(target.ID, ALPHA)

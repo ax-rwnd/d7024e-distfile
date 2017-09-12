@@ -11,7 +11,7 @@ func TestLookupContact(t *testing.T) {
     const numNodes = bucketSize + 1
     kademlias := []*Kademlia{}
     for i := 0; i < numNodes; i++ {
-        kademlias = append(kademlias, NewKademlia("127.0.0.1", 8300+i))
+        kademlias = append(kademlias, NewKademlia("127.0.0.1", getNetworkTestPort()))
     }
     fmt.Printf("looking up %v\n", kademlias[numNodes-1].network.routing.me.String())
     // Add some contacts between them
