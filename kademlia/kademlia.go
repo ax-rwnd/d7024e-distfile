@@ -90,16 +90,16 @@ func (kademlia *Kademlia) LookupContact(target *Contact) ([]Contact) {
                 lookupChannels = append(lookupChannels, callChannel)
 
                 // Make new recursive lookup calls and store the channels
-                go func(fun func(c []Contact) []Contact, input []Contact, ch chan []Contact) int {
+                go func(input []Contact, ch chan []Contact) int {
                     set := []reflect.SelectCase{}
                     set = append(set, reflect.SelectCase{
                         Dir:  reflect.SelectSend,
                         Chan: reflect.ValueOf(ch),
-                        Send: reflect.ValueOf(fun(input)),
+                        Send: reflect.ValueOf(lookup(input)),
                     })
                     to, _, _ := reflect.Select(set)
                     return to
-                }(lookup, nodesToVisit, callChannel)
+                }(nodesToVisit, callChannel)
             }
         }
 

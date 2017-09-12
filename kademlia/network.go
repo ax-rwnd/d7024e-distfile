@@ -85,7 +85,8 @@ func (network *Network) Listen() {
             log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
             continue
         }
-        // Store the contact that just messaged the node TODO mutex lock
+        // Store the contact that just messaged the node
+        // TODO mutex lock
         //contact := NewContact(message.Origin.ID, remote_addr.String())
         //network.routing.AddContact(contact)
 
@@ -206,7 +207,8 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
     fmt.Printf("%v received from %v: %v\n", network.myAddress.String(), contact.Address, response.String())
     if response.MsgType == PONG && response.RpcID.Equals(&msg.RpcID) {
         // Node responded to ping, so add it to routing table
-        network.routing.AddContact(NewContact(response.Origin.ID, contact.Address))
+        // TODO mutex lock
+        //network.routing.AddContact(NewContact(response.Origin.ID, contact.Address))
         return true
     }
     return false
@@ -228,7 +230,7 @@ func (network *Network) SendFindContactMessage(findTarget *Contact, receiver *Co
     // Validate the response
     if response != nil && response.MsgType == FIND_CONTACT_MSG {
         if !response.RpcID.Equals(&rpcID) {
-            log.Printf("%v wrong RPC header from %v: %v should be %v\n", network.routing.me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
+            log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.routing.me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
         }
         fmt.Printf("%v received from %v: %v \n", network.routing.me.Address, response.Origin.Address, response.String())
         // Unmarshal the contacts we got back
@@ -239,7 +241,7 @@ func (network *Network) SendFindContactMessage(findTarget *Contact, receiver *Co
         }
         return newContacts
     } else {
-        log.Printf("%v received UNKNOWN %v: %v \n", network.routing.me.Address, response.Origin.Address, response.String())
+        log.Printf("%v received unknown message %v: %v \n", network.routing.me.Address, response.Origin.Address, response.String())
     }
     return []Contact{}
 }
