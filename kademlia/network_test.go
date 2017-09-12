@@ -111,16 +111,16 @@ func TestSendStoreMessage(t *testing.T) {
     // Send store message from one node to another, check if it was received and stored
     node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
     node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
-    key := NewRandomKademliaID()
+    hash := NewRandomKademliaID()
     // Send store message
-    node1.SendStoreMessage(key, &node2.routing.me)
+    node1.SendStoreMessage(hash, &node2.routing.me)
     var err error
     var data []byte
     // Wait then poll until node2 has stored the hash
     timer := time.NewTimer(time.Second / 2)
     <-timer.C
     polls := 0
-    for data, err = node2.store.Lookup(*key); err != nil; {
+    for data, err = node2.store.Lookup(*hash); err != nil; {
         polls++
         fmt.Println(node2.store)
         timer.Reset(time.Second / 2)
@@ -154,3 +154,37 @@ func TestSendFindDataMessage(t *testing.T) {
     }
 }
 
+func TestSendStoreFindMessages(t *testing.T) {
+    // Send store message from one node to another, find if it was received and stored
+    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    hash := NewRandomKademliaID()
+    // Send store message
+    node1.SendStoreMessage(hash, &node2.routing.me)
+    var err error
+    // Wait then poll until node2 has stored the hash
+    timer := time.NewTimer(time.Second / 2)
+    <-timer.C
+    polls := 0
+    for _, err = node2.store.Lookup(*hash); err != nil; {
+        polls++
+        fmt.Println(node2.store)
+        timer.Reset(time.Second / 2)
+        <-timer.C
+        if polls > 10 {
+            t.Fail()
+            return
+        }
+    }
+    // Find the data (owner of file hash)
+    contacts := node1.SendFindDataMessage(hash, &node2.routing.me)
+    if contacts == nil || len(contacts) == 0 || !contacts[0].Equals(&node1.routing.me) {
+        t.Fail()
+    }
+    delete(node2.store, *hash)
+    // Check that node2 no longer finds the data
+    contacts = node1.SendFindDataMessage(hash, &node2.routing.me)
+    if len(contacts) != 0 {
+        t.Fail()
+    }
+}
