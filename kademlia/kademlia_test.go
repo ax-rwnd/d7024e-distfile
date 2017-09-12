@@ -28,11 +28,11 @@ func TestLookupContact(t *testing.T) {
     var cc = []chan []Contact{make(chan []Contact), make(chan []Contact),}
     // First node does not yet have last node as a contact. Find it.
     go func() {
-        cc[0] <- kademlias[0].LookupContact(&kademlias[numNodes-1].network.routing.me)
+        cc[0] <- kademlias[0].LookupContact(kademlias[numNodes-1].network.routing.me.ID)
     }()
     // Try the reverse concurrently
     go func() {
-        cc[1] <- kademlias[numNodes-1].LookupContact(&kademlias[0].network.routing.me)
+        cc[1] <- kademlias[numNodes-1].LookupContact(kademlias[0].network.routing.me.ID)
     }()
     contacts1 := <-cc[0]
     contacts2 := <-cc[1]

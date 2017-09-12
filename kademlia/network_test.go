@@ -3,6 +3,8 @@ package kademlia
 import (
     "testing"
     "fmt"
+    "github.com/vmihailenco/msgpack"
+    "time"
 )
 
 var testPort int = 8000
@@ -87,7 +89,7 @@ func TestSendFindContactMessage(t *testing.T) {
     contact2 := node2.routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000001000000000000"), "127.0.0.1:8402"))
     contact0 := node2.routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "127.0.0.1:8402"))
     // Send find message
-    contacts := node1.SendFindContactMessage(contact0, &node2.routing.me)
+    contacts := node1.SendFindContactMessage(contact0.ID, &node2.routing.me)
     // Contacts should be sorted in the response
     if contacts == nil || !contacts[0].Equals(contact0) || !contacts[1].Equals(contact1) || !contacts[2].Equals(contact2) {
         t.Fail()
@@ -104,3 +106,51 @@ func TestUDPConnectionFail(t *testing.T) {
         t.Fail()
     }
 }
+
+func TestSendStoreMessage(t *testing.T) {
+    // Send store message from one node to another, check if it was received and stored
+    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    key := NewRandomKademliaID()
+    // Send store message
+    node1.SendStoreMessage(key, &node2.routing.me)
+    var err error
+    var data []byte
+    // Wait then poll until node2 has stored the hash
+    timer := time.NewTimer(time.Second / 2)
+    <-timer.C
+    polls := 0
+    for data, err = node2.store.Lookup(*key); err != nil; {
+        polls++
+        fmt.Println(node2.store)
+        timer.Reset(time.Second / 2)
+        <-timer.C
+        if polls > 10 {
+            t.Fail()
+            return
+        }
+    }
+    // Unmarshal and check if value is ok (file owner contact)
+    var value []Contact
+    err = msgpack.Unmarshal(data, &value)
+    if err != nil || !value[0].Equals(&node1.routing.me) {
+        t.Fail()
+    }
+}
+
+func TestSendFindDataMessage(t *testing.T) {
+    // Put a file hash and file owner into kvStore of node2. See if node1 finds it.
+    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    hash := NewRandomKademliaID()
+    marshaledContact, err := msgpack.Marshal([]Contact{node1.routing.me})
+    if err != nil {
+        t.Fail()
+    }
+    node2.store.Insert(*hash, false, marshaledContact)
+    contacts := node1.SendFindDataMessage(hash, &node2.routing.me)
+    if contacts == nil || len(contacts) == 0 || !contacts[0].Equals(&node1.routing.me) {
+        t.Fail()
+    }
+}
+

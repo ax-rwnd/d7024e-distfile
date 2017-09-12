@@ -15,12 +15,11 @@ func NewKademlia(ip string, port int) *Kademlia {
     return kademlia
 }
 
-func (kademlia *Kademlia) LookupContact(target *Contact) ([]Contact) {
+func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
     me := kademlia.network.routing.me;
-    myAddress := kademlia.network.myAddress
 
     // Find the alpha closest nodes
-    closestContacts := kademlia.network.routing.FindClosestContacts(target.ID, ALPHA)
+    closestContacts := kademlia.network.routing.FindClosestContacts(target, ALPHA)
     // How many nodes we have queried so far
     numNodesVisited := 0
     // This holds the nodes we have already queried
@@ -39,9 +38,9 @@ func (kademlia *Kademlia) LookupContact(target *Contact) ([]Contact) {
         for i := 0; i < len(contactsToQuery); i++ {
             rpcChannels = append(rpcChannels, make(chan []Contact))
         }
-        // Send go routine RPCs to the closest contacts, connect to channels
+        // Send concurrent RPCs to the closest contacts, connect to channels
         for i := range contactsToQuery {
-            go func(findTarget *Contact, receiver *Contact, channel chan []Contact) int {
+            go func(findTarget *KademliaID, receiver *Contact, channel chan []Contact) int {
                 set := []reflect.SelectCase{reflect.SelectCase{
                     Dir:  reflect.SelectSend,
                     Chan: reflect.ValueOf(channel),
@@ -76,7 +75,7 @@ func (kademlia *Kademlia) LookupContact(target *Contact) ([]Contact) {
                     nodesToVisit = append(nodesToVisit, newContact)
                     nodesVisited.AddContact(newContact)
                     numNodesVisited++
-                    fmt.Printf("%v new contact: %v\n", myAddress, newContact.String())
+                    fmt.Printf("%v new contact: %v\n", kademlia.network.routing.me.Address, newContact.String())
                 }
                 <-mut
             }
@@ -120,10 +119,10 @@ func (kademlia *Kademlia) LookupContact(target *Contact) ([]Contact) {
     // Block on the initial call to the recursive lookup
     lookup(closestContacts)
     // The temporary routing table will contain the closest contacts found during lookup
-    return nodesVisited.FindClosestContacts(target.ID, bucketSize)
+    return nodesVisited.FindClosestContacts(target, bucketSize)
 }
 
-func (kademlia *Kademlia) LookupData(hash string) {
+func (kademlia *Kademlia) LookupData(hash *KademliaID) {
     // TODO
 }
 
