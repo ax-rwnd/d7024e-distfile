@@ -24,7 +24,6 @@ func TestRoutingTable(t *testing.T) {
 
 func TestRoutingTableFindClosestContacts(t *testing.T) {
     const numContacts = 0x42
-    const portStart = 8000
     const maxResults = 20
     const toFind = 0x232323
 
@@ -32,11 +31,11 @@ func TestRoutingTableFindClosestContacts(t *testing.T) {
     var allcontacts [numContacts]Contact
 
     // Create a routing table with some contacts, also store all contacts for comparison
-    me := NewContact(NewKademliaID(fmt.Sprintf("%040x", 0)), fmt.Sprintf("localhost:%04d", portStart))
+    me := NewContact(NewKademliaID(fmt.Sprintf("%040x", 0)), fmt.Sprintf("localhost:%04d", getNetworkTestPort()))
     allcontacts[0] = me
     rt := NewRoutingTable(me)
     for i := 1; i < numContacts; i++ {
-        contact := NewContact(NewKademliaID(fmt.Sprintf("%040x", i)), fmt.Sprintf("localhost:%04d", portStart+i))
+        contact := NewContact(NewKademliaID(fmt.Sprintf("%040x", i)), fmt.Sprintf("localhost:%04d", getNetworkTestPort()))
         allcontacts[i] = contact
         rt.AddContact(contact)
     }
@@ -75,3 +74,4 @@ func TestFileHash(t *testing.T) {
         t.Fail()
     }
 }
+

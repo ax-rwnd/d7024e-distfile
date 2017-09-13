@@ -4,7 +4,6 @@ import (
     "testing"
     "fmt"
     "github.com/vmihailenco/msgpack"
-    "time"
 )
 
 var testPort int = 8000
@@ -111,25 +110,16 @@ func TestSendStoreMessage(t *testing.T) {
     // Send store message from one node to another, check if it was received and stored
     node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
     node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node2.listenChannel = make(chan NetworkMessage)
     hash := NewRandomKademliaID()
     // Send store message
     node1.SendStoreMessage(hash, &node2.routing.me)
     var err error
     var data []byte
-    // Wait then poll until node2 has stored the hash
-    timer := time.NewTimer(time.Second / 2)
-    <-timer.C
-    polls := 0
-    for data, err = node2.store.Lookup(*hash); err != nil; {
-        polls++
-        fmt.Println(node2.store)
-        timer.Reset(time.Second / 2)
-        <-timer.C
-        if polls > 10 {
-            t.Fail()
-            return
-        }
-    }
+    // Wait until node2 has stored the hash
+    <-node2.listenChannel
+    node2.listenChannel = nil
+    data, err = node2.store.Lookup(*hash)
     // Unmarshal and check if value is ok (file owner contact)
     var value []Contact
     err = msgpack.Unmarshal(data, &value)
@@ -158,24 +148,13 @@ func TestSendStoreFindMessages(t *testing.T) {
     // Send store message from one node to another, find if it was received and stored
     node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
     node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node2.listenChannel = make(chan NetworkMessage)
     hash := NewRandomKademliaID()
     // Send store message
     node1.SendStoreMessage(hash, &node2.routing.me)
-    var err error
-    // Wait then poll until node2 has stored the hash
-    timer := time.NewTimer(time.Second / 2)
-    <-timer.C
-    polls := 0
-    for _, err = node2.store.Lookup(*hash); err != nil; {
-        polls++
-        fmt.Println(node2.store)
-        timer.Reset(time.Second / 2)
-        <-timer.C
-        if polls > 10 {
-            t.Fail()
-            return
-        }
-    }
+    // Wait until node2 has stored the hash
+    <-node2.listenChannel
+    node2.listenChannel = nil
     // Find the data (owner of file hash)
     contacts := node1.SendFindDataMessage(hash, &node2.routing.me)
     if contacts == nil || len(contacts) == 0 || !contacts[0].Equals(&node1.routing.me) {

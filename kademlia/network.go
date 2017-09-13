@@ -30,8 +30,8 @@ type NetworkMessage struct {
 }
 
 type Network struct {
-    // Listening connection
-    connection *net.UDPConn
+    // If not nil, Listen will channel messages here after processing them
+    listenChannel chan NetworkMessage
     // Kademlia routing table
     routing *RoutingTable
     // <key, value> store
@@ -67,7 +67,7 @@ func (network *Network) Listen(listening *chan bool) {
     var err error
     ip, port, err := network.routing.me.ParseAddress()
     udpAddr := net.UDPAddr{IP: net.ParseIP(ip), Port: port}
-    network.connection, err = net.ListenUDP("udp", &udpAddr)
+    connection, err := net.ListenUDP("udp", &udpAddr)
     if err != nil {
         // Fail if we cannot listen on that address
         log.Fatal(err)
@@ -75,12 +75,12 @@ func (network *Network) Listen(listening *chan bool) {
     // Message that node is now listening
     *listening <- true
 
-    defer network.connection.Close()
+    defer connection.Close()
 
     buf := make([]byte, RECEIVE_BUFFER_SIZE)
     for {
         // Block until message is available, then unmarshal the package
-        _, remote_addr, err := network.connection.ReadFromUDP(buf)
+        _, remote_addr, err := connection.ReadFromUDP(buf)
         var message NetworkMessage
         err = msgpack.Unmarshal(buf, &message)
         if err != nil {
@@ -98,7 +98,7 @@ func (network *Network) Listen(listening *chan bool) {
         case message.MsgType == PING:
             // Respond to the ping
             msg := NetworkMessage{MsgType: PONG, Origin: network.routing.me, RpcID: message.RpcID}
-            go network.SendMessageToConnection(&msg, remote_addr, network.connection)
+            go network.SendMessageToConnection(&msg, remote_addr, connection)
 
         case message.MsgType == FIND_CONTACT_MSG:
             // Unmarshal the contact from data field. Then find the k closest neighbors to it.
@@ -116,7 +116,7 @@ func (network *Network) Listen(listening *chan bool) {
                 continue
             }
             msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.routing.me, RpcID: message.RpcID, Data: closestContactsMsg}
-            go network.SendMessageToConnection(&msg, remote_addr, network.connection)
+            go network.SendMessageToConnection(&msg, remote_addr, connection)
 
         case message.MsgType == STORE_DATA_MSG:
             // TODO: append owner to file owner list?
@@ -148,7 +148,7 @@ func (network *Network) Listen(listening *chan bool) {
             if err != nil {
                 // Key not in store, reply with empty message
                 msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID}
-                go network.SendMessageToConnection(&msg, remote_addr, network.connection)
+                go network.SendMessageToConnection(&msg, remote_addr, connection)
                 continue
             }
             // <Key,Value> exists
@@ -158,16 +158,19 @@ func (network *Network) Listen(listening *chan bool) {
                 // <Key,Value> exists, and value is the contacts of file owners
                 fmt.Printf("%v sends to %v <key,value> pair <%v,%v>\n", network.routing.me.Address, remote_addr, hash.String(), owners)
                 msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID, Data: value}
-                go network.SendMessageToConnection(&msg, remote_addr, network.connection)
+                go network.SendMessageToConnection(&msg, remote_addr, connection)
             } else {
                 // <Key,Value> exists, and is a file. TODO: use TCP
                 fmt.Printf("%v sends TCP file transfer to %v\n", network.routing.me.Address, remote_addr)
                 msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID}
-                go network.SendMessageToConnection(&msg, remote_addr, network.connection)
+                go network.SendMessageToConnection(&msg, remote_addr, connection)
             }
 
         default:
             log.Printf("%v received unknown message from %v: %v\n", network.routing.me.Address, remote_addr, err)
+        }
+        if network.listenChannel != nil {
+            network.listenChannel <- message
         }
     }
 }
@@ -266,7 +269,7 @@ func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver 
     findTargetMsg, err := msgpack.Marshal(*findTarget)
     if err != nil {
         log.Printf("%v Could not marshal contact: %v\n", network.routing.me, err)
-        return nil
+        return []Contact{}
     }
     // Unique id for this RPC
     rpcID := *NewKademliaIDRandom()
@@ -323,11 +326,11 @@ func (network *Network) SendFindDataMessage(hash *KademliaID, receiver *Contact)
     return []Contact{}
 }
 
-func (network *Network) SendStoreMessage(key *KademliaID, receiver *Contact) {
-    keyMsg, err := msgpack.Marshal(key)
+func (network *Network) SendStoreMessage(hash *KademliaID, receiver *Contact) {
+    hashMsg, err := msgpack.Marshal(hash)
     if err != nil {
-        log.Printf("%v Could not marshal kademlia ID %v\n", network.routing.me, key)
+        log.Printf("%v Could not marshal kademlia ID %v\n", network.routing.me, hash)
     }
-    message := NetworkMessage{MsgType: STORE_DATA_MSG, Origin: network.routing.me, RpcID: *NewKademliaIDRandom(), Data: keyMsg}
+    message := NetworkMessage{MsgType: STORE_DATA_MSG, Origin: network.routing.me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
     network.SendMessage(&message, receiver)
 }
