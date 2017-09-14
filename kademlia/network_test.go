@@ -160,7 +160,7 @@ func TestSendStoreFindMessages(t *testing.T) {
     if contacts == nil || len(contacts) == 0 || !contacts[0].Equals(&node1.routing.me) {
         t.Fail()
     }
-    delete(node2.store, *hash)
+    delete(node2.store.mapping, *hash)
     // Check that node2 no longer finds the data
     contacts = node1.SendFindDataMessage(hash, &node2.routing.me)
     if len(contacts) != 0 {

@@ -3,6 +3,7 @@ package kademlia
 import (
     "time"
     "errors"
+    "sync"
 )
 
 // Error states
@@ -13,52 +14,58 @@ var NotFoundError = errors.New("Value was not found in map.")
 // Globals
 var EvictionTime, _ = time.ParseDuration("1h")
 
-type KVStore map[KademliaID]kvData
+type KVStore struct {
+    mapping map[KademliaID]kvData
+    mutex   *sync.Mutex
+}
 type kvData struct {
     data      []byte
     timestamp time.Time
     pinned    bool
 }
 
-func NewKVStore() KVStore {
-    return make(map[KademliaID]kvData)
+func NewKVStore() *KVStore {
+    kvStore := new(KVStore)
+    kvStore.mutex = &sync.Mutex{}
+    kvStore.mapping = make(map[KademliaID]kvData)
+    return kvStore
 }
 
 // Evict data after some time
 func (kvStore KVStore) Evict(now time.Time) (err error) {
-    for key, value := range kvStore {
+    kvStore.mutex.Lock()
+    for key, value := range kvStore.mapping {
         if now.Sub(value.timestamp) > EvictionTime && !value.pinned {
-            delete(kvStore, key) //TODO: check for runtimes
+            delete(kvStore.mapping, key) //TODO: check for runtimes
         }
     }
+    kvStore.mutex.Unlock()
     return
 }
 
 // Don't silently update duplicate data (in case of collision)
 func (kvStore KVStore) Insert(hash KademliaID, pinned bool, data []byte) (outData kvData, err error) {
-    if kvStore == nil {
+    kvStore.mutex.Lock()
+    if kvStore.mapping == nil {
         err = NotInitializedError
-    } else if _, ok := kvStore[hash]; ok {
+    } else if _, ok := kvStore.mapping[hash]; ok {
         err = DuplicateError
     } else {
         outData = kvData{data: data, timestamp: time.Now(), pinned: pinned}
-        kvStore[hash] = outData
+        kvStore.mapping[hash] = outData
     }
+    kvStore.mutex.Unlock()
     return
 }
 
 // Lookup data from table
 func (kvStore KVStore) Lookup(hash KademliaID) (output []byte, err error) {
-    if val, ok := kvStore[hash]; ok {
+    kvStore.mutex.Lock()
+    if val, ok := kvStore.mapping[hash]; ok {
         output = val.data
     } else {
         err = NotFoundError
     }
+    kvStore.mutex.Unlock()
     return
-}
-
-func (kvStore KVStore) Clear() {
-    for k := range kvStore {
-        delete(kvStore, k)
-    }
 }
