@@ -7,19 +7,19 @@ import (
 )
 
 type Kademlia struct {
-    network *Network
+    Net *Network
 }
 
 func NewKademlia(ip string, port int) *Kademlia {
     kademlia := new(Kademlia)
-    kademlia.network = NewNetwork(ip, port)
+    kademlia.Net = NewNetwork(ip, port)
     return kademlia
 }
 
 func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
-    me := kademlia.network.routing.me;
+    me := kademlia.Net.Routing.Me;
     // The lookup intiator starts by picking \alpha nodes from its closest non-empty k-bucket...
-    closestContacts := kademlia.network.routing.FindClosestContacts(target, ALPHA)
+    closestContacts := kademlia.Net.Routing.FindClosestContacts(target, ALPHA)
     // This holds the nodes we have already queried
     contactsVisited := make(map[KademliaID]Contact)
     contactsVisited[*me.ID] = me
@@ -42,7 +42,7 @@ func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
                 set := []reflect.SelectCase{reflect.SelectCase{
                     Dir:  reflect.SelectSend,
                     Chan: reflect.ValueOf(channel),
-                    Send: reflect.ValueOf(kademlia.network.SendFindContactMessage(findTarget, receiver)),
+                    Send: reflect.ValueOf(kademlia.Net.SendFindContactMessage(findTarget, receiver)),
                 }}
                 to, _, _ := reflect.Select(set)
                 return to
@@ -138,7 +138,7 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
             set := []reflect.SelectCase{reflect.SelectCase{
                 Dir:  reflect.SelectSend,
                 Chan: reflect.ValueOf(channel),
-                Send: reflect.ValueOf(kademlia.network.SendFindDataMessage(hash, &contact)),
+                Send: reflect.ValueOf(kademlia.Net.SendFindDataMessage(hash, &contact)),
             }}
             to, _, _ := reflect.Select(set)
             return to
@@ -175,9 +175,9 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
 // Store the data locally, then have other nodes store the contact of one(s?) holding the data
 func (kademlia *Kademlia) Store(data []byte) {
     hash := NewKademliaIDFromBytes(data)
-    kademlia.network.store.Insert(*hash, false, data)
+    kademlia.Net.store.Insert(*hash, false, data)
     contacts := kademlia.LookupContact(hash)
     for _, contact := range contacts {
-        kademlia.network.SendStoreMessage(hash, &contact)
+        kademlia.Net.SendStoreMessage(hash, &contact)
     }
 }

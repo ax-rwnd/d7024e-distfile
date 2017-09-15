@@ -33,7 +33,7 @@ type Network struct {
     // If not nil, Listen will channel messages here after processing them
     listenChannel chan NetworkMessage
     // Kademlia routing table
-    routing *RoutingTable
+    Routing *RoutingTable
     // <Key, Value> store
     store *KVStore
 }
@@ -52,7 +52,7 @@ func min(a, b int) int {
 func NewNetwork(ip string, port int) *Network {
     network := new(Network)
     // Random ID on network start
-    network.routing = NewRoutingTable(NewContact(NewKademliaIDRandom(), ip+":"+strconv.Itoa(port)))
+    network.Routing = NewRoutingTable(NewContact(NewKademliaIDRandom(), ip+":"+strconv.Itoa(port)))
     // Key value store
     network.store = NewKVStore()
     // Start listening to UDP socket
@@ -64,7 +64,7 @@ func NewNetwork(ip string, port int) *Network {
 
 func (network *Network) handlePingMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
     // Respond to the ping
-    msg := NetworkMessage{MsgType: PONG, Origin: network.routing.me, RpcID: message.RpcID}
+    msg := NetworkMessage{MsgType: PONG, Origin: network.Routing.Me, RpcID: message.RpcID}
     go network.SendMessageToConnection(&msg, remote_addr, connection)
 }
 
@@ -73,17 +73,17 @@ func (network *Network) handleFindContactMessage(connection *net.UDPConn, remote
     var findTarget KademliaID
     err := msgpack.Unmarshal(message.Data, &findTarget)
     if err != nil {
-        log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
+        log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
         return
     }
-    closestContacts := network.routing.FindClosestContacts(&findTarget, bucketSize)
+    closestContacts := network.Routing.FindClosestContacts(&findTarget, bucketSize)
     // Marshal the closest contacts and send them in the response
     closestContactsMsg, err := msgpack.Marshal(closestContacts)
     if err != nil {
-        fmt.Printf("%v failed to marshal contact list with %v\n", network.routing.me.Address, err)
+        fmt.Printf("%v failed to marshal contact list with %v\n", network.Routing.Me.Address, err)
         return
     }
-    msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.routing.me, RpcID: message.RpcID, Data: closestContactsMsg}
+    msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.Routing.Me, RpcID: message.RpcID, Data: closestContactsMsg}
     go network.SendMessageToConnection(&msg, remote_addr, connection)
 }
 
@@ -92,7 +92,7 @@ func (network *Network) handleStoreDataMessage(connection *net.UDPConn, remote_a
     var key KademliaID
     err := msgpack.Unmarshal(message.Data, &key)
     if err != nil {
-        log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
+        log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
         return
     }
     var owners []Contact
@@ -110,11 +110,11 @@ func (network *Network) handleStoreDataMessage(connection *net.UDPConn, remote_a
     fmt.Printf("%v\n", owners)
     marshaledOwners, err := msgpack.Marshal(owners)
     if err != nil {
-        log.Printf("%v failed to marshal value from %v: %v\n", network.routing.me.Address, remote_addr, err)
+        log.Printf("%v failed to marshal value from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
         return
     }
     network.store.Insert(key, false, marshaledOwners)
-    fmt.Printf("%v stored hash key %v from %v\n", network.routing.me.Address, key.String(), message.Origin.String())
+    fmt.Printf("%v stored hash key %v from %v\n", network.Routing.Me.Address, key.String(), message.Origin.String())
 }
 
 func (network *Network) handleFindDataMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
@@ -122,14 +122,14 @@ func (network *Network) handleFindDataMessage(connection *net.UDPConn, remote_ad
     var hash KademliaID
     err := msgpack.Unmarshal(message.Data, &hash)
     if err != nil {
-        log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
+        log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
         return
     }
     // Check if we have it
     value, err := network.store.Lookup(hash)
     if err != nil {
         // Key not in store, reply with empty message
-        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID}
+        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
         go network.SendMessageToConnection(&msg, remote_addr, connection)
         return
     }
@@ -138,13 +138,13 @@ func (network *Network) handleFindDataMessage(connection *net.UDPConn, remote_ad
     err = msgpack.Unmarshal(value, &owners)
     if err == nil {
         // <Key,Value> exists, and value is the contacts of file owners
-        fmt.Printf("%v sends to %v <key,value> pair <%v,%v>\n", network.routing.me.Address, remote_addr, hash.String(), owners)
-        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID, Data: value}
+        fmt.Printf("%v sends to %v <key,value> pair <%v,%v>\n", network.Routing.Me.Address, remote_addr, hash.String(), owners)
+        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID, Data: value}
         go network.SendMessageToConnection(&msg, remote_addr, connection)
     } else {
         // <Key,Value> exists, and is a file. TODO: use TCP
-        fmt.Printf("%v sends TCP file transfer to %v\n", network.routing.me.Address, remote_addr)
-        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID}
+        fmt.Printf("%v sends TCP file transfer to %v\n", network.Routing.Me.Address, remote_addr)
+        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
         go network.SendMessageToConnection(&msg, remote_addr, connection)
     }
 }
@@ -152,8 +152,8 @@ func (network *Network) handleFindDataMessage(connection *net.UDPConn, remote_ad
 func (network *Network) handleMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
     // Store the contact that just messaged the node
     contact := NewContact(message.Origin.ID, remote_addr.String())
-    network.routing.AddContact(contact)
-    fmt.Printf("%v received from %v: %v \n", network.routing.me.Address, remote_addr, message.String())
+    network.Routing.AddContact(contact)
+    fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, remote_addr, message.String())
     switch {
     case message.MsgType == PING:
         network.handlePingMessage(connection, remote_addr, message)
@@ -164,14 +164,14 @@ func (network *Network) handleMessage(connection *net.UDPConn, remote_addr *net.
     case message.MsgType == FIND_DATA_MSG:
         network.handleFindDataMessage(connection, remote_addr, message)
     default:
-        log.Printf("%v received unknown message from %v: %v\n", network.routing.me.Address, remote_addr)
+        log.Printf("%v received unknown message from %v: %v\n", network.Routing.Me.Address, remote_addr)
     }
 }
 
 // Listen for incoming UDP connections, until network.networkChannel is closed
 func (network *Network) Listen(listening *chan bool) {
     var err error
-    ip, port, err := network.routing.me.ParseAddress()
+    ip, port, err := network.Routing.Me.ParseAddress()
     udpAddr := net.UDPAddr{IP: net.ParseIP(ip), Port: port}
     connection, err := net.ListenUDP("udp", &udpAddr)
     if err != nil {
@@ -190,7 +190,7 @@ func (network *Network) Listen(listening *chan bool) {
         var message NetworkMessage
         err = msgpack.Unmarshal(buf, &message)
         if err != nil {
-            log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
+            log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
             continue
         }
         network.handleMessage(connection, remote_addr, &message)
@@ -202,14 +202,14 @@ func (network *Network) Listen(listening *chan bool) {
 
 // Send a message over an established UDP connection
 func (network *Network) SendMessageToConnection(message *NetworkMessage, address *net.UDPAddr, conn *net.UDPConn) {
-    fmt.Printf("%v responds to %v: %v \n", network.routing.me.Address, address, message.String())
+    fmt.Printf("%v responds to %v: %v \n", network.Routing.Me.Address, address, message.String())
     msg, err := msgpack.Marshal(message)
     if err != nil {
-        log.Printf("%v failed to marshal network message with %v\n", network.routing.me.Address, err)
+        log.Printf("%v failed to marshal network message with %v\n", network.Routing.Me.Address, err)
     }
     _, err = conn.WriteToUDP(msg, address)
     if err != nil {
-        log.Printf("%v UDP write failed with %v\n", network.routing.me.Address, err)
+        log.Printf("%v UDP write failed with %v\n", network.Routing.Me.Address, err)
     }
 }
 
@@ -217,10 +217,10 @@ func (network *Network) SendMessageToConnection(message *NetworkMessage, address
 func (network *Network) SendMessage(message *NetworkMessage, contact *Contact) (net.Conn, error) {
     connection, err := net.Dial("udp", contact.Address)
     if err != nil {
-        log.Printf("%v connection to %v failed with %v\n", network.routing.me.Address, contact.Address, err)
+        log.Printf("%v connection to %v failed with %v\n", network.Routing.Me.Address, contact.Address, err)
         return nil, err
     }
-    fmt.Printf("%v sends to %v: %v\n", network.routing.me.Address, contact.Address, message.String())
+    fmt.Printf("%v sends to %v: %v\n", network.Routing.Me.Address, contact.Address, message.String())
     msg, err := msgpack.Marshal(message)
     connection.Write(msg)
     return connection, nil
@@ -249,7 +249,7 @@ func (network *Network) SendReceiveMessage(message *NetworkMessage, contact *Con
                 err = msgpack.Unmarshal(buf[:n], &responseMsg)
                 timer.Stop()
                 if err != nil {
-                    log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, contact.Address, err)
+                    log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, contact.Address, err)
                     m <- nil
                     return
                 }
@@ -262,26 +262,26 @@ func (network *Network) SendReceiveMessage(message *NetworkMessage, contact *Con
     case msg := <-channel:
         return msg
     case <-timer.C:
-        log.Printf("%v connection timeout to %v\n", network.routing.me.Address, contact.Address)
+        log.Printf("%v connection timeout to %v\n", network.Routing.Me.Address, contact.Address)
         return nil
     }
 }
 
 // Ping another node with a UDP packet
 func (network *Network) SendPingMessage(contact *Contact) bool {
-    if contact.Address == network.routing.me.Address {
+    if contact.Address == network.Routing.Me.Address {
         // Node pinged itself
         return true
     }
-    msg := &NetworkMessage{MsgType: PING, Origin: network.routing.me, RpcID: *NewKademliaIDRandom()}
+    msg := &NetworkMessage{MsgType: PING, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom()}
     response := network.SendReceiveMessage(msg, contact)
     if response == nil {
         return false
     }
-    fmt.Printf("%v received from %v: %v\n", network.routing.me.Address, contact.Address, response.String())
+    fmt.Printf("%v received from %v: %v\n", network.Routing.Me.Address, contact.Address, response.String())
     if response.MsgType == PONG && response.RpcID.Equals(&msg.RpcID) {
         // Node responded to ping, so add it to routing table
-        network.routing.AddContact(NewContact(response.Origin.ID, contact.Address))
+        network.Routing.AddContact(NewContact(response.Origin.ID, contact.Address))
         return true
     }
     return false
@@ -292,29 +292,29 @@ func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver 
     // Marshal the contact and store it in Data byte array later
     findTargetMsg, err := msgpack.Marshal(*findTarget)
     if err != nil {
-        log.Printf("%v Could not marshal contact: %v\n", network.routing.me, err)
+        log.Printf("%v Could not marshal contact: %v\n", network.Routing.Me, err)
         return []Contact{}
     }
     // Unique id for this RPC
     rpcID := *NewKademliaIDRandom()
-    msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.routing.me, RpcID: rpcID, Data: findTargetMsg}
+    msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.Routing.Me, RpcID: rpcID, Data: findTargetMsg}
     // Blocks until response
     response := network.SendReceiveMessage(&msg, receiver)
     // Validate the response
     if response != nil && response.MsgType == FIND_CONTACT_MSG {
         if !response.RpcID.Equals(&rpcID) {
-            log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.routing.me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
+            log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.Routing.Me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
         }
-        fmt.Printf("%v received from %v: %v \n", network.routing.me.Address, response.Origin.Address, response.String())
+        fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
         // Unmarshal the contacts we got back
         var newContacts []Contact
         err := msgpack.Unmarshal(response.Data, &newContacts)
         if err != nil {
-            log.Printf("%v Could not unmarshal contact array: %v\n", network.routing.me, err)
+            log.Printf("%v Could not unmarshal contact array: %v\n", network.Routing.Me, err)
         }
         return newContacts
     } else if response != nil {
-        log.Printf("%v received unknown message %v: %v \n", network.routing.me.Address, response.Origin.Address, response.String())
+        log.Printf("%v received unknown message %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
     }
     return []Contact{}
 }
@@ -323,20 +323,20 @@ func (network *Network) SendFindDataMessage(hash *KademliaID, receiver *Contact)
     // Marshal the contact and store it in Data byte array later
     hashMsg, err := msgpack.Marshal(*hash)
     if err != nil {
-        log.Printf("%v Could not marshal kademlia id: %v\n", network.routing.me, err)
+        log.Printf("%v Could not marshal kademlia id: %v\n", network.Routing.Me, err)
         return []Contact{}
     }
     // Unique id for this RPC
     rpcID := *NewKademliaIDRandom()
-    msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: rpcID, Data: hashMsg}
+    msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: rpcID, Data: hashMsg}
     // Blocks until response
     response := network.SendReceiveMessage(&msg, receiver)
     // Validate the response
     if response != nil && response.MsgType == FIND_DATA_MSG {
         if !response.RpcID.Equals(&rpcID) {
-            log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.routing.me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
+            log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.Routing.Me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
         }
-        fmt.Printf("%v received from %v: %v \n", network.routing.me.Address, response.Origin.Address, response.String())
+        fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
         // Unmarshal the contacts we got back, if any
         var newContacts []Contact
         err := msgpack.Unmarshal(response.Data, &newContacts)
@@ -345,7 +345,7 @@ func (network *Network) SendFindDataMessage(hash *KademliaID, receiver *Contact)
         }
         return newContacts
     } else if response != nil {
-        log.Printf("%v received unknown message %v: %v \n", network.routing.me.Address, response.Origin.Address, response.String())
+        log.Printf("%v received unknown message %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
     }
     return []Contact{}
 }
@@ -353,8 +353,8 @@ func (network *Network) SendFindDataMessage(hash *KademliaID, receiver *Contact)
 func (network *Network) SendStoreMessage(hash *KademliaID, receiver *Contact) {
     hashMsg, err := msgpack.Marshal(hash)
     if err != nil {
-        log.Printf("%v Could not marshal kademlia ID %v\n", network.routing.me, hash)
+        log.Printf("%v Could not marshal kademlia ID %v\n", network.Routing.Me, hash)
     }
-    message := NetworkMessage{MsgType: STORE_DATA_MSG, Origin: network.routing.me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
+    message := NetworkMessage{MsgType: STORE_DATA_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
     network.SendMessage(&message, receiver)
 }

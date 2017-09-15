@@ -5,7 +5,7 @@ import "sync"
 const bucketSize = 20
 
 type RoutingTable struct {
-    me      Contact
+    Me      Contact
     buckets [IDLength * 8]*bucket
     mutex   *sync.Mutex
 }
@@ -15,7 +15,7 @@ func NewRoutingTable(me Contact) *RoutingTable {
     for i := 0; i < IDLength*8; i++ {
         routingTable.buckets[i] = newBucket()
     }
-    routingTable.me = me
+    routingTable.Me = me
     routingTable.mutex = &sync.Mutex{}
     return routingTable
 }
@@ -57,7 +57,7 @@ func (routingTable *RoutingTable) FindClosestContacts(target *KademliaID, count 
 }
 
 func (routingTable *RoutingTable) getBucketIndex(id *KademliaID) int {
-    distance := id.CalcDistance(routingTable.me.ID)
+    distance := id.CalcDistance(routingTable.Me.ID)
     for i := 0; i < IDLength; i++ {
         for j := 0; j < 8; j++ {
             if (distance[i]>>uint8(7-j))&0x1 != 0 {

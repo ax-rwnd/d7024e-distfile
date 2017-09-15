@@ -18,8 +18,8 @@ func createKademliaMesh(width int, height int) []*Kademlia {
             k[i] = NewKademlia("127.0.0.1", getNetworkTestPort())
             // Connect along x axis
             if x > 0 {
-                k[i-1].network.routing.AddContact(k[i].network.routing.me)
-                k[i].network.routing.AddContact(k[i-1].network.routing.me)
+                k[i-1].Net.Routing.AddContact(k[i].Net.Routing.Me)
+                k[i].Net.Routing.AddContact(k[i-1].Net.Routing.Me)
             }
         }
         if y > 0 {
@@ -29,19 +29,19 @@ func createKademliaMesh(width int, height int) []*Kademlia {
                 down := (y-1)*width + x
                 downLeft := down - 1
                 downRight := down + 1
-                k[me].network.routing.AddContact(k[down].network.routing.me)
-                k[down].network.routing.AddContact(k[me].network.routing.me)
+                k[me].Net.Routing.AddContact(k[down].Net.Routing.Me)
+                k[down].Net.Routing.AddContact(k[me].Net.Routing.Me)
                 if x == 0 {
-                    k[me].network.routing.AddContact(k[downRight].network.routing.me)
-                    k[downRight].network.routing.AddContact(k[me].network.routing.me)
+                    k[me].Net.Routing.AddContact(k[downRight].Net.Routing.Me)
+                    k[downRight].Net.Routing.AddContact(k[me].Net.Routing.Me)
                 } else if x == width-1 {
-                    k[me].network.routing.AddContact(k[downLeft].network.routing.me)
-                    k[downLeft].network.routing.AddContact(k[me].network.routing.me)
+                    k[me].Net.Routing.AddContact(k[downLeft].Net.Routing.Me)
+                    k[downLeft].Net.Routing.AddContact(k[me].Net.Routing.Me)
                 } else {
-                    k[me].network.routing.AddContact(k[downRight].network.routing.me)
-                    k[downRight].network.routing.AddContact(k[me].network.routing.me)
-                    k[me].network.routing.AddContact(k[downLeft].network.routing.me)
-                    k[downLeft].network.routing.AddContact(k[me].network.routing.me)
+                    k[me].Net.Routing.AddContact(k[downRight].Net.Routing.Me)
+                    k[downRight].Net.Routing.AddContact(k[me].Net.Routing.Me)
+                    k[me].Net.Routing.AddContact(k[downLeft].Net.Routing.Me)
+                    k[downLeft].Net.Routing.AddContact(k[me].Net.Routing.Me)
                 }
             }
         }
@@ -56,21 +56,21 @@ func TestLookupContact(t *testing.T) {
     var cc = []chan []Contact{make(chan []Contact), make(chan []Contact),}
     // First node does not yet have last node as a contact. Find it.
     go func() {
-        cc[0] <- kademlias[0].LookupContact(kademlias[numNodes-1].network.routing.me.ID)
+        cc[0] <- kademlias[0].LookupContact(kademlias[numNodes-1].Net.Routing.Me.ID)
     }()
     // Try the reverse concurrently
     go func() {
-        cc[1] <- kademlias[numNodes-1].LookupContact(kademlias[0].network.routing.me.ID)
+        cc[1] <- kademlias[numNodes-1].LookupContact(kademlias[0].Net.Routing.Me.ID)
     }()
     contacts1 := <-cc[0]
     contacts2 := <-cc[1]
-    fmt.Printf("%v lookup %v found %v\n", kademlias[0].network.routing.me.Address, kademlias[numNodes-1].network.routing.me.ID.String(), contacts1)
-    fmt.Printf("%v lookup %v found %v\n", kademlias[numNodes-1].network.routing.me.Address, kademlias[0].network.routing.me.ID.String(), contacts2)
+    fmt.Printf("%v lookup %v found %v\n", kademlias[0].Net.Routing.Me.Address, kademlias[numNodes-1].Net.Routing.Me.ID.String(), contacts1)
+    fmt.Printf("%v lookup %v found %v\n", kademlias[numNodes-1].Net.Routing.Me.Address, kademlias[0].Net.Routing.Me.ID.String(), contacts2)
     // Check that the contacts are correct
-    if !contacts1[0].ID.Equals(kademlias[numNodes-1].network.routing.me.ID) {
+    if !contacts1[0].ID.Equals(kademlias[numNodes-1].Net.Routing.Me.ID) {
         t.Fail()
     }
-    if !contacts2[0].ID.Equals(kademlias[0].network.routing.me.ID) {
+    if !contacts2[0].ID.Equals(kademlias[0].Net.Routing.Me.ID) {
         t.Fail()
     }
 }
@@ -92,7 +92,7 @@ func TestLookupStoreData(t *testing.T) {
     candidates := *reader.LookupData(hash)
     // Check that we actually got the right contact
     fmt.Printf("Found owners %v\n", candidates)
-    if !candidates[0].ID.Equals(owner1.network.routing.me.ID) {
+    if !candidates[0].ID.Equals(owner1.Net.Routing.Me.ID) {
         t.Fail()
         log.Printf("Invalid contact list %v\n", candidates)
     }
@@ -118,8 +118,8 @@ func TestLookupStoreDataMultiple(t *testing.T) {
     candidates := *reader.LookupData(hash)
     // Check that we actually got the right contact
     fmt.Printf("Found owners %v\n", candidates)
-    if !(candidates[0].ID.Equals(owner1.network.routing.me.ID) && candidates[1].ID.Equals(owner2.network.routing.me.ID) ||
-        candidates[1].ID.Equals(owner1.network.routing.me.ID) && candidates[0].ID.Equals(owner2.network.routing.me.ID)) {
+    if !(candidates[0].ID.Equals(owner1.Net.Routing.Me.ID) && candidates[1].ID.Equals(owner2.Net.Routing.Me.ID) ||
+        candidates[1].ID.Equals(owner1.Net.Routing.Me.ID) && candidates[0].ID.Equals(owner2.Net.Routing.Me.ID)) {
         t.Fail()
         log.Printf("Invalid contact list %v\n", candidates)
     }
