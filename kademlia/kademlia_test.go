@@ -4,6 +4,7 @@ import (
     "testing"
     "fmt"
     "time"
+    "log"
 )
 
 // Makes a grid/mesh of nodes and adds contacts for each node to 8 of its neighbours (fewer at borders).
@@ -76,13 +77,39 @@ func TestLookupContact(t *testing.T) {
 
 // Test storing and finding data
 func TestLookupStoreData(t *testing.T) {
-    kademlias := createKademliaMesh(10, 20)
+    kademlias := createKademliaMesh(5, 10)
     numK := len(kademlias)
     // Store some data
-    owner := kademlias[0]
+    owner1 := kademlias[0]
     data := []byte("message")
-    owner.Store(data)
-    // Wait for the message to propagate
+    owner1.Store(data)
+    // Wait for the messages to propagate
+    timer := time.NewTimer(time.Second * 2)
+    <-timer.C
+    // Read data from another node
+    hash := NewKademliaIDFromBytes(data)
+    reader := kademlias[numK-1]
+    candidates := *reader.LookupData(hash)
+    // Check that we actually got the right contact
+    fmt.Printf("Found owners %v\n", candidates)
+    if !candidates[0].ID.Equals(owner1.network.routing.me.ID) {
+        t.Fail()
+        log.Printf("Invalid contact list %v\n", candidates)
+    }
+    // TODO: Actually transfer the data, not just owner contact
+}
+
+// Test storing and finding data
+func TestLookupStoreDataMultiple(t *testing.T) {
+    kademlias := createKademliaMesh(3, 3)
+    numK := len(kademlias)
+    // Store some data
+    owner1 := kademlias[0]
+    owner2 := kademlias[1]
+    data := []byte("message")
+    owner1.Store(data)
+    owner2.Store(data)
+    // Wait for the messages to propagate
     timer := time.NewTimer(time.Second)
     <-timer.C
     // Read data from another node
@@ -90,8 +117,11 @@ func TestLookupStoreData(t *testing.T) {
     reader := kademlias[numK-1]
     candidates := *reader.LookupData(hash)
     // Check that we actually got the right contact
-    if !candidates[0].ID.Equals(owner.network.routing.me.ID) {
+    fmt.Printf("Found owners %v\n", candidates)
+    if !(candidates[0].ID.Equals(owner1.network.routing.me.ID) && candidates[1].ID.Equals(owner2.network.routing.me.ID) ||
+        candidates[1].ID.Equals(owner1.network.routing.me.ID) && candidates[0].ID.Equals(owner2.network.routing.me.ID)) {
         t.Fail()
+        log.Printf("Invalid contact list %v\n", candidates)
     }
     // TODO: Actually transfer the data, not just owner contact
 }

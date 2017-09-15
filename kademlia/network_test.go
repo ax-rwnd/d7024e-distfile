@@ -6,7 +6,7 @@ import (
     "github.com/vmihailenco/msgpack"
 )
 
-var testPort int = 8000
+var testPort int = 7000
 
 func getNetworkTestPort() int {
     testPort++

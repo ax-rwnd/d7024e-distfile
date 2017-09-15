@@ -127,12 +127,12 @@ func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
 // Find the owner of a file with specific hash.
 func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
     // First find the contacts of the nodes with closest ID to hash
-    contacts := kademlia.LookupContact(hash)
+    closestContacts := kademlia.LookupContact(hash)
     rpcChannels := []chan []Contact{}
-    for i := 0; i < len(contacts); i++ {
+    for i := 0; i < len(closestContacts); i++ {
         rpcChannels = append(rpcChannels, make(chan []Contact))
     }
-    for i, contact := range contacts {
+    for i, contact := range closestContacts {
         // Send concurrent find data requests RPCs
         go func(findTarget *KademliaID, receiver *Contact, channel chan []Contact) int {
             set := []reflect.SelectCase{reflect.SelectCase{
@@ -144,7 +144,8 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
             return to
         }(hash, &contact, rpcChannels[i])
     }
-    for range contacts {
+    ownerMap := make(map[KademliaID]Contact)
+    for range closestContacts {
         // Block until we get one or more responses from RPCs
         set := []reflect.SelectCase{}
         for _, ch := range rpcChannels {
@@ -156,11 +157,19 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
         _, valValue, _ := reflect.Select(set)
         newContacts := valValue.Interface().([]Contact)
         if newContacts != nil && len(newContacts) > 0 {
-            // TODO: Should this return all of the owners if there are many?
-            return &newContacts
+            // Return all of the owners if there are many?
+            for _, newContact := range newContacts {
+                if _, ok := ownerMap[*newContact.ID]; !ok {
+                    ownerMap[*newContact.ID] = newContact
+                }
+            }
         }
     }
-    return nil
+    owners := []Contact{}
+    for _, value := range ownerMap {
+        owners = append(owners, value)
+    }
+    return &owners
 }
 
 // Store the data locally, then have other nodes store the contact of one(s?) holding the data

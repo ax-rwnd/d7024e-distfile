@@ -62,84 +62,107 @@ func NewNetwork(ip string, port int) *Network {
     return network
 }
 
+func (network *Network) handlePingMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
+    // Respond to the ping
+    msg := NetworkMessage{MsgType: PONG, Origin: network.routing.me, RpcID: message.RpcID}
+    go network.SendMessageToConnection(&msg, remote_addr, connection)
+}
+
+func (network *Network) handleFindContactMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
+    // Unmarshal the contact from data field. Then find the k closest neighbors to it.
+    var findTarget KademliaID
+    err := msgpack.Unmarshal(message.Data, &findTarget)
+    if err != nil {
+        log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
+        return
+    }
+    closestContacts := network.routing.FindClosestContacts(&findTarget, bucketSize)
+    // Marshal the closest contacts and send them in the response
+    closestContactsMsg, err := msgpack.Marshal(closestContacts)
+    if err != nil {
+        fmt.Printf("%v failed to marshal contact list with %v\n", network.routing.me.Address, err)
+        return
+    }
+    msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.routing.me, RpcID: message.RpcID, Data: closestContactsMsg}
+    go network.SendMessageToConnection(&msg, remote_addr, connection)
+}
+
+func (network *Network) handleStoreDataMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
+    // Store a non-marshalled kademlia id as key (file hash), and marshalled contacts as value (file owners)
+    var key KademliaID
+    err := msgpack.Unmarshal(message.Data, &key)
+    if err != nil {
+        log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
+        return
+    }
+    var owners []Contact
+    // Check if we have it
+    if value, err := network.store.Lookup(key); err == nil {
+        err := msgpack.Unmarshal(value, &owners)
+        if err != nil {
+            // The content of this <key,value> is not a contact list, but a file. Do nothing.
+            return
+        }
+    } else {
+        owners = []Contact{}
+    }
+    owners = append(owners, message.Origin)
+    fmt.Printf("%v\n", owners)
+    marshaledOwners, err := msgpack.Marshal(owners)
+    if err != nil {
+        log.Printf("%v failed to marshal value from %v: %v\n", network.routing.me.Address, remote_addr, err)
+        return
+    }
+    network.store.Insert(key, false, marshaledOwners)
+    fmt.Printf("%v stored hash key %v from %v\n", network.routing.me.Address, key.String(), message.Origin.String())
+}
+
+func (network *Network) handleFindDataMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
+    // Read the file hash (kvStore key) requested
+    var hash KademliaID
+    err := msgpack.Unmarshal(message.Data, &hash)
+    if err != nil {
+        log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
+        return
+    }
+    // Check if we have it
+    value, err := network.store.Lookup(hash)
+    if err != nil {
+        // Key not in store, reply with empty message
+        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID}
+        go network.SendMessageToConnection(&msg, remote_addr, connection)
+        return
+    }
+    // <Key,Value> exists
+    var owners []Contact
+    err = msgpack.Unmarshal(value, &owners)
+    if err == nil {
+        // <Key,Value> exists, and value is the contacts of file owners
+        fmt.Printf("%v sends to %v <key,value> pair <%v,%v>\n", network.routing.me.Address, remote_addr, hash.String(), owners)
+        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID, Data: value}
+        go network.SendMessageToConnection(&msg, remote_addr, connection)
+    } else {
+        // <Key,Value> exists, and is a file. TODO: use TCP
+        fmt.Printf("%v sends TCP file transfer to %v\n", network.routing.me.Address, remote_addr)
+        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID}
+        go network.SendMessageToConnection(&msg, remote_addr, connection)
+    }
+}
+
 func (network *Network) handleMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
     // Store the contact that just messaged the node
     contact := NewContact(message.Origin.ID, remote_addr.String())
     network.routing.AddContact(contact)
     fmt.Printf("%v received from %v: %v \n", network.routing.me.Address, remote_addr, message.String())
-
     switch {
     case message.MsgType == PING:
-        // Respond to the ping
-        msg := NetworkMessage{MsgType: PONG, Origin: network.routing.me, RpcID: message.RpcID}
-        go network.SendMessageToConnection(&msg, remote_addr, connection)
-
+        network.handlePingMessage(connection, remote_addr, message)
     case message.MsgType == FIND_CONTACT_MSG:
-        // Unmarshal the contact from data field. Then find the k closest neighbors to it.
-        var findTarget KademliaID
-        err := msgpack.Unmarshal(message.Data, &findTarget)
-        if err != nil {
-            log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
-            return
-        }
-        closestContacts := network.routing.FindClosestContacts(&findTarget, bucketSize)
-        // Marshal the closest contacts and send them in the response
-        closestContactsMsg, err := msgpack.Marshal(closestContacts)
-        if err != nil {
-            fmt.Printf("%v failed to marshal contact list with %v\n", network.routing.me.Address, err)
-            return
-        }
-        msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.routing.me, RpcID: message.RpcID, Data: closestContactsMsg}
-        go network.SendMessageToConnection(&msg, remote_addr, connection)
-
+        network.handleFindContactMessage(connection, remote_addr, message)
     case message.MsgType == STORE_DATA_MSG:
-        // TODO: append owner to file owner list?
-        // Store a non-marshalled kademlia id as key (file hash), and marshalled contacts as value (file owners)
-        var key KademliaID
-        err := msgpack.Unmarshal(message.Data, &key)
-        if err != nil {
-            log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
-            return
-        }
-        marshaledOwner, err := msgpack.Marshal([]Contact{message.Origin})
-        if err != nil {
-            log.Printf("%v failed to marshal value from %v: %v\n", network.routing.me.Address, remote_addr, err)
-            return
-        }
-        network.store.Insert(key, false, marshaledOwner)
-        fmt.Printf("%v stored hash key %v from %v\n", network.routing.me.Address, key.String(), message.Origin.String())
-
+        network.handleStoreDataMessage(connection, remote_addr, message)
     case message.MsgType == FIND_DATA_MSG:
-        // Read the file hash (kvStore key) requested
-        var hash KademliaID
-        err := msgpack.Unmarshal(message.Data, &hash)
-        if err != nil {
-            log.Printf("%v malformed message from %v: %v\n", network.routing.me.Address, remote_addr, err)
-            return
-        }
-        // Check if we have it
-        value, err := network.store.Lookup(hash)
-        if err != nil {
-            // Key not in store, reply with empty message
-            msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID}
-            go network.SendMessageToConnection(&msg, remote_addr, connection)
-            return
-        }
-        // <Key,Value> exists
-        var owners []Contact
-        err = msgpack.Unmarshal(value, &owners)
-        if err == nil {
-            // <Key,Value> exists, and value is the contacts of file owners
-            fmt.Printf("%v sends to %v <key,value> pair <%v,%v>\n", network.routing.me.Address, remote_addr, hash.String(), owners)
-            msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID, Data: value}
-            go network.SendMessageToConnection(&msg, remote_addr, connection)
-        } else {
-            // <Key,Value> exists, and is a file. TODO: use TCP
-            fmt.Printf("%v sends TCP file transfer to %v\n", network.routing.me.Address, remote_addr)
-            msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.routing.me, RpcID: message.RpcID}
-            go network.SendMessageToConnection(&msg, remote_addr, connection)
-        }
-
+        network.handleFindDataMessage(connection, remote_addr, message)
     default:
         log.Printf("%v received unknown message from %v: %v\n", network.routing.me.Address, remote_addr)
     }

@@ -39,21 +39,3 @@ func TestNotFoundError(t *testing.T) {
         t.Fail()
     }
 }
-
-func TestDuplicateError(t *testing.T) {
-    kvStore := NewKVStore()
-    data := []byte("Test data")
-    id := NewKademliaIDFromBytes(data)
-    pinned := false
-    _, err := kvStore.Insert(*id, pinned, data)
-    if err != nil {
-        fmt.Println(err)
-        t.Fail()
-    }
-    _, err = kvStore.Insert(*id, pinned, data)
-    if err != DuplicateError {
-        fmt.Println("Wrong error")
-        fmt.Println(err)
-        t.Fail()
-    }
-}

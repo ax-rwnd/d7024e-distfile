@@ -48,8 +48,6 @@ func (kvStore KVStore) Insert(hash KademliaID, pinned bool, data []byte) (outDat
     kvStore.mutex.Lock()
     if kvStore.mapping == nil {
         err = NotInitializedError
-    } else if _, ok := kvStore.mapping[hash]; ok {
-        err = DuplicateError
     } else {
         outData = kvData{data: data, timestamp: time.Now(), pinned: pinned}
         kvStore.mapping[hash] = outData
