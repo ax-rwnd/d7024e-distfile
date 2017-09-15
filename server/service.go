@@ -5,6 +5,9 @@ import (
     "github.com/takama/daemon"
     "os"
     "syscall"
+    "../mqueue"
+    "../kademlia"
+    "sync"
 )
 
 var dependencies = []string{"dummy.service"}
@@ -51,6 +54,14 @@ func (service *Service) Manage() (string, error) {
 
     interrupt := make(chan os.Signal, 1)
     signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
+
+    thisnet := kademlia.NewKademlia("127.0.0.1", 8123)
+
+    wq := sync.WaitGroup{}
+    wq.Add(1)
+    go mqueue.RestServer(thisnet.Net, mqueue.Messages, ":8095")
+    go mqueue.Translate(&wq)
+
 
     for {
         select {
