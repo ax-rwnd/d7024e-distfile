@@ -7,18 +7,12 @@ import (
     "log"
     "github.com/vmihailenco/msgpack"
     "strconv"
+    "rpc"
 )
 
 const ALPHA = 3
 const CONNECTION_TIMEOUT = time.Second * 2
 const CONNECTION_RETRY_DELAY = time.Second / 2
-const (
-    FIND_CONTACT_MSG = iota
-    FIND_DATA_MSG
-    STORE_DATA_MSG
-    PING
-    PONG
-)
 const RECEIVE_BUFFER_SIZE = 1 << 20
 
 // Msgpack package requires public variables
@@ -64,7 +58,7 @@ func NewNetwork(ip string, port int) *Network {
 
 func (network *Network) handlePingMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
     // Respond to the ping
-    msg := NetworkMessage{MsgType: PONG, Origin: network.Routing.Me, RpcID: message.RpcID}
+    msg := NetworkMessage{MsgType: rpc.PONG, Origin: network.Routing.Me, RpcID: message.RpcID}
     go network.SendMessageToConnection(&msg, remote_addr, connection)
 }
 
@@ -83,7 +77,7 @@ func (network *Network) handleFindContactMessage(connection *net.UDPConn, remote
         fmt.Printf("%v failed to marshal contact list with %v\n", network.Routing.Me.Address, err)
         return
     }
-    msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.Routing.Me, RpcID: message.RpcID, Data: closestContactsMsg}
+    msg := NetworkMessage{MsgType: rpc.FIND_CONTACT_MSG, Origin: network.Routing.Me, RpcID: message.RpcID, Data: closestContactsMsg}
     go network.SendMessageToConnection(&msg, remote_addr, connection)
 }
 
@@ -129,7 +123,7 @@ func (network *Network) handleFindDataMessage(connection *net.UDPConn, remote_ad
     value, err := network.store.Lookup(hash)
     if err != nil {
         // Key not in store, reply with empty message
-        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
+        msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
         go network.SendMessageToConnection(&msg, remote_addr, connection)
         return
     }
@@ -139,12 +133,12 @@ func (network *Network) handleFindDataMessage(connection *net.UDPConn, remote_ad
     if err == nil {
         // <Key,Value> exists, and value is the contacts of file owners
         fmt.Printf("%v sends to %v <key,value> pair <%v,%v>\n", network.Routing.Me.Address, remote_addr, hash.String(), owners)
-        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID, Data: value}
+        msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID, Data: value}
         go network.SendMessageToConnection(&msg, remote_addr, connection)
     } else {
         // <Key,Value> exists, and is a file. TODO: use TCP
         fmt.Printf("%v sends TCP file transfer to %v\n", network.Routing.Me.Address, remote_addr)
-        msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
+        msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
         go network.SendMessageToConnection(&msg, remote_addr, connection)
     }
 }
@@ -155,13 +149,13 @@ func (network *Network) handleMessage(connection *net.UDPConn, remote_addr *net.
     network.Routing.AddContact(contact)
     fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, remote_addr, message.String())
     switch {
-    case message.MsgType == PING:
+    case message.MsgType == rpc.PING:
         network.handlePingMessage(connection, remote_addr, message)
-    case message.MsgType == FIND_CONTACT_MSG:
+    case message.MsgType == rpc.FIND_CONTACT_MSG:
         network.handleFindContactMessage(connection, remote_addr, message)
-    case message.MsgType == STORE_DATA_MSG:
+    case message.MsgType == rpc.STORE_DATA_MSG:
         network.handleStoreDataMessage(connection, remote_addr, message)
-    case message.MsgType == FIND_DATA_MSG:
+    case message.MsgType == rpc.FIND_DATA_MSG:
         network.handleFindDataMessage(connection, remote_addr, message)
     default:
         log.Printf("%v received unknown message from %v: %v\n", network.Routing.Me.Address, remote_addr)
@@ -273,13 +267,13 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
         // Node pinged itself
         return true
     }
-    msg := &NetworkMessage{MsgType: PING, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom()}
+    msg := &NetworkMessage{MsgType: rpc.PING, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom()}
     response := network.SendReceiveMessage(msg, contact)
     if response == nil {
         return false
     }
     fmt.Printf("%v received from %v: %v\n", network.Routing.Me.Address, contact.Address, response.String())
-    if response.MsgType == PONG && response.RpcID.Equals(&msg.RpcID) {
+    if response.MsgType == rpc.PONG && response.RpcID.Equals(&msg.RpcID) {
         // Node responded to ping, so add it to routing table
         network.Routing.AddContact(NewContact(response.Origin.ID, contact.Address))
         return true
@@ -297,11 +291,11 @@ func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver 
     }
     // Unique id for this RPC
     rpcID := *NewKademliaIDRandom()
-    msg := NetworkMessage{MsgType: FIND_CONTACT_MSG, Origin: network.Routing.Me, RpcID: rpcID, Data: findTargetMsg}
+    msg := NetworkMessage{MsgType: rpc.FIND_CONTACT_MSG, Origin: network.Routing.Me, RpcID: rpcID, Data: findTargetMsg}
     // Blocks until response
     response := network.SendReceiveMessage(&msg, receiver)
     // Validate the response
-    if response != nil && response.MsgType == FIND_CONTACT_MSG {
+    if response != nil && response.MsgType == rpc.FIND_CONTACT_MSG {
         if !response.RpcID.Equals(&rpcID) {
             log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.Routing.Me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
         }
@@ -328,11 +322,11 @@ func (network *Network) SendFindDataMessage(hash *KademliaID, receiver *Contact)
     }
     // Unique id for this RPC
     rpcID := *NewKademliaIDRandom()
-    msg := NetworkMessage{MsgType: FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: rpcID, Data: hashMsg}
+    msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: rpcID, Data: hashMsg}
     // Blocks until response
     response := network.SendReceiveMessage(&msg, receiver)
     // Validate the response
-    if response != nil && response.MsgType == FIND_DATA_MSG {
+    if response != nil && response.MsgType == rpc.FIND_DATA_MSG {
         if !response.RpcID.Equals(&rpcID) {
             log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.Routing.Me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
         }
@@ -355,6 +349,6 @@ func (network *Network) SendStoreMessage(hash *KademliaID, receiver *Contact) {
     if err != nil {
         log.Printf("%v Could not marshal kademlia ID %v\n", network.Routing.Me, hash)
     }
-    message := NetworkMessage{MsgType: STORE_DATA_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
+    message := NetworkMessage{MsgType: rpc.STORE_DATA_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
     network.SendMessage(&message, receiver)
 }

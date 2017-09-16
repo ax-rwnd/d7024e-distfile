@@ -3,6 +3,7 @@ package kademlia
 import (
     "testing"
     "fmt"
+    "rpc"
     "github.com/vmihailenco/msgpack"
 )
 
@@ -61,9 +62,9 @@ func TestSendReceiveMessage(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
     node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
     // This message must get the correct response
-    msg := &NetworkMessage{MsgType: PING, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
+    msg := &NetworkMessage{MsgType: rpc.PING, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
     response := node1.SendReceiveMessage(msg, &node2.Routing.Me)
-    if response.MsgType != PONG || !response.RpcID.Equals(&msg.RpcID) || !response.Origin.ID.Equals(node2.Routing.Me.ID) {
+    if response.MsgType != rpc.PONG || !response.RpcID.Equals(&msg.RpcID) || !response.Origin.ID.Equals(node2.Routing.Me.ID) {
         t.Fail()
     }
 }
@@ -72,7 +73,7 @@ func TestSendReceiveMessageTimeout(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
     node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
     // This message should not get a response, so node1 should timeout when listening
-    msg := &NetworkMessage{MsgType: PONG, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
+    msg := &NetworkMessage{MsgType: rpc.PONG, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
     response := node1.SendReceiveMessage(msg, &node2.Routing.Me)
     if response != nil {
         fmt.Printf("%v\n", response.String())
