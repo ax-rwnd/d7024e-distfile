@@ -15,7 +15,7 @@ func createKademliaMesh(width int, height int) []*Kademlia {
         // Fill the row
         for x := 0; x < width; x++ {
             i := y*width + x
-            k[i] = NewKademlia("127.0.0.1", getNetworkTestPort())
+            k[i] = NewKademlia("127.0.0.1", getTestPort(), getTestPort())
             // Connect along x axis
             if x > 0 {
                 k[i-1].Net.Routing.AddContact(k[i].Net.Routing.Me)

@@ -6,11 +6,14 @@ import (
     "fmt"
     "log"
     "github.com/vmihailenco/msgpack"
-    "strconv"
     "rpc"
+    "strconv"
 )
 
-const ALPHA = 3
+const (
+    TCP = iota
+    UDP
+)
 const CONNECTION_TIMEOUT = time.Second * 2
 const CONNECTION_RETRY_DELAY = time.Second / 2
 const RECEIVE_BUFFER_SIZE = 1 << 20
@@ -33,7 +36,11 @@ type Network struct {
 }
 
 func (msg *NetworkMessage) String() string {
-    return fmt.Sprintf("MsgType=%v, Origin=%v, RpcID=%v, Data=%v", msg.MsgType, msg.Origin.String(), msg.RpcID.String(), msg.Data)
+    dataMsg := fmt.Sprintf("%v", msg.Data)
+    if len(msg.Data) > 1<<10 { // Not larger than 1 kB
+        dataMsg = strconv.Itoa(len(msg.Data)) + " bytes"
+    }
+    return fmt.Sprintf("MsgType=%v, Origin=%v, RpcID=%v, Data=%v", msg.MsgType, msg.Origin.String(), msg.RpcID.String(), dataMsg)
 }
 
 func min(a, b int) int {
@@ -43,10 +50,10 @@ func min(a, b int) int {
     return b
 }
 
-func NewNetwork(ip string, port int) *Network {
+func NewNetwork(ip string, tcpPort int, udpPort int) *Network {
     network := new(Network)
     // Random ID on network start
-    network.Routing = NewRoutingTable(NewContact(NewKademliaIDRandom(), ip+":"+strconv.Itoa(port)))
+    network.Routing = NewRoutingTable(NewContact(NewKademliaIDRandom(), ip, tcpPort, udpPort))
     // Key value store
     network.store = NewKVStore()
     // Start listening to UDP socket
@@ -56,13 +63,13 @@ func NewNetwork(ip string, port int) *Network {
     return network
 }
 
-func (network *Network) handlePingMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
+func (network *Network) handlePingMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Respond to the ping
-    msg := NetworkMessage{MsgType: rpc.PONG, Origin: network.Routing.Me, RpcID: message.RpcID}
-    go network.SendMessageToConnection(&msg, remote_addr, connection)
+    msg := NetworkMessage{MsgType: rpc.PONG_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
+    go network.SendMessageToUdpConnection(&msg, remote_addr, connection)
 }
 
-func (network *Network) handleFindContactMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
+func (network *Network) handleFindContactMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Unmarshal the contact from data field. Then find the k closest neighbors to it.
     var findTarget KademliaID
     err := msgpack.Unmarshal(message.Data, &findTarget)
@@ -78,10 +85,10 @@ func (network *Network) handleFindContactMessage(connection *net.UDPConn, remote
         return
     }
     msg := NetworkMessage{MsgType: rpc.FIND_CONTACT_MSG, Origin: network.Routing.Me, RpcID: message.RpcID, Data: closestContactsMsg}
-    go network.SendMessageToConnection(&msg, remote_addr, connection)
+    go network.SendMessageToUdpConnection(&msg, remote_addr, connection)
 }
 
-func (network *Network) handleStoreDataMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
+func (network *Network) handleStoreDataMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Store a non-marshalled kademlia id as key (file hash), and marshalled contacts as value (file owners)
     var key KademliaID
     err := msgpack.Unmarshal(message.Data, &key)
@@ -92,8 +99,7 @@ func (network *Network) handleStoreDataMessage(connection *net.UDPConn, remote_a
     var owners []Contact
     // Check if we have it
     if value, err := network.store.Lookup(key); err == nil {
-        err := msgpack.Unmarshal(value, &owners)
-        if err != nil {
+        if err := msgpack.Unmarshal(value, &owners); err != nil {
             // The content of this <key,value> is not a contact list, but a file. Do nothing.
             return
         }
@@ -111,7 +117,7 @@ func (network *Network) handleStoreDataMessage(connection *net.UDPConn, remote_a
     fmt.Printf("%v stored hash key %v from %v\n", network.Routing.Me.Address, key.String(), message.Origin.String())
 }
 
-func (network *Network) handleFindDataMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
+func (network *Network) handleFindDataMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Read the file hash (kvStore key) requested
     var hash KademliaID
     err := msgpack.Unmarshal(message.Data, &hash)
@@ -124,32 +130,28 @@ func (network *Network) handleFindDataMessage(connection *net.UDPConn, remote_ad
     if err != nil {
         // Key not in store, reply with empty message
         msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
-        go network.SendMessageToConnection(&msg, remote_addr, connection)
+        go network.SendMessageToUdpConnection(&msg, remote_addr, connection)
         return
     }
     // <Key,Value> exists
     var owners []Contact
     err = msgpack.Unmarshal(value, &owners)
-    if err == nil {
-        // <Key,Value> exists, and value is the contacts of file owners
-        fmt.Printf("%v sends to %v <key,value> pair <%v,%v>\n", network.Routing.Me.Address, remote_addr, hash.String(), owners)
-        msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID, Data: value}
-        go network.SendMessageToConnection(&msg, remote_addr, connection)
-    } else {
-        // <Key,Value> exists, and is a file. TODO: use TCP
-        fmt.Printf("%v sends TCP file transfer to %v\n", network.Routing.Me.Address, remote_addr)
-        msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
-        go network.SendMessageToConnection(&msg, remote_addr, connection)
+    if err != nil {
+        owners = []Contact{network.Routing.Me}
     }
+    // <Key,Value> exists, and value is the contacts of file owners
+    fmt.Printf("%v sends to %v <key,value> pair <%v,%v>\n", network.Routing.Me.Address, remote_addr, hash.String(), owners)
+    msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID, Data: value}
+    go network.SendMessageToUdpConnection(&msg, remote_addr, connection)
+
 }
 
-func (network *Network) handleMessage(connection *net.UDPConn, remote_addr *net.UDPAddr, message *NetworkMessage) {
-    // Store the contact that just messaged the node
-    contact := NewContact(message.Origin.ID, remote_addr.String())
-    network.Routing.AddContact(contact)
+func (network *Network) handleMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
+    // Store the contact that just messaged the node (we don't know its TCP port)
+    network.Routing.AddContact(message.Origin)
     fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, remote_addr, message.String())
     switch {
-    case message.MsgType == rpc.PING:
+    case message.MsgType == rpc.PING_MSG:
         network.handlePingMessage(connection, remote_addr, message)
     case message.MsgType == rpc.FIND_CONTACT_MSG:
         network.handleFindContactMessage(connection, remote_addr, message)
@@ -158,58 +160,141 @@ func (network *Network) handleMessage(connection *net.UDPConn, remote_addr *net.
     case message.MsgType == rpc.FIND_DATA_MSG:
         network.handleFindDataMessage(connection, remote_addr, message)
     default:
-        log.Printf("%v received unknown message from %v: %v\n", network.Routing.Me.Address, remote_addr)
+        log.Printf("%v received unknown message from %v: %v\n", network.Routing.Me.Address, remote_addr, message)
     }
 }
 
-// Listen for incoming UDP connections, until network.networkChannel is closed
-func (network *Network) Listen(listening *chan bool) {
-    var err error
-    ip, port, err := network.Routing.Me.ParseAddress()
-    udpAddr := net.UDPAddr{IP: net.ParseIP(ip), Port: port}
-    connection, err := net.ListenUDP("udp", &udpAddr)
+func (network *Network) handleTCP(connection net.Conn) {
+    buffer := make([]byte, RECEIVE_BUFFER_SIZE)
+    _, err := connection.Read(buffer)
     if err != nil {
-        // Fail if we cannot listen on that address
+        log.Printf("%v unreadable TCP message from %v: %v\n", network.Routing.Me.Address, connection.RemoteAddr().String(), err)
+    }
+    var message NetworkMessage
+    err = msgpack.Unmarshal(buffer, &message)
+    if err != nil {
+        log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, connection.RemoteAddr().String(), err)
+        return
+    }
+    fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, connection.RemoteAddr().String(), message.String())
+    if message.MsgType == rpc.TRANSFER_DATA_MSG {
+        var hash KademliaID
+        err = msgpack.Unmarshal(message.Data, &hash)
+        if err != nil {
+            log.Printf("%v invalid hash from %v: %v\n", network.Routing.Me.Address, connection.RemoteAddr().String(), err)
+            return
+        }
+        data, err := network.store.Lookup(hash)
+        if err != nil {
+            log.Printf("%v cannot find data for %v: %v\n", network.Routing.Me.Address, connection.RemoteAddr().String(), hash.String())
+            return
+        }
+        response := NetworkMessage{MsgType: rpc.TRANSFER_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID, Data: data}
+        marshaledResponse, err := msgpack.Marshal(response)
+        if err != nil {
+            log.Printf("%v invalid hash from %v: %v\n", network.Routing.Me.Address, connection.RemoteAddr().String(), err)
+            return
+        }
+        fmt.Printf("%v responds to %v: %v\n", network.Routing.Me.Address, connection.RemoteAddr().String(), response.String())
+        connection.Write(marshaledResponse)
+    }
+    connection.Close()
+}
+
+func (network *Network) handleUDP(connection net.PacketConn) {
+    buf := make([]byte, RECEIVE_BUFFER_SIZE)
+    _, remote_address, err := connection.ReadFrom(buf)
+    if err != nil {
         log.Fatal(err)
     }
-    // Message that node is now listening
-    *listening <- true
+    var message NetworkMessage
+    err = msgpack.Unmarshal(buf, &message)
+    if err != nil {
+        log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remote_address, err)
+        return
+    }
+    network.handleMessage(connection, remote_address, &message)
+    if network.listenChannel != nil {
+        network.listenChannel <- message
+    }
+}
 
-    defer connection.Close()
+// Listen for incoming TCP and UDP connections
+func (network *Network) Listen(listening *chan bool) {
+    tcpAddress := network.Routing.Me.Address.IP + ":" + strconv.Itoa(network.Routing.Me.Address.TcpPort)
+    udpAddress := network.Routing.Me.Address.IP + ":" + strconv.Itoa(network.Routing.Me.Address.UdpPort)
+    tcpChannel := make(chan bool)
+    udpChannel := make(chan bool)
 
-    buf := make([]byte, RECEIVE_BUFFER_SIZE)
-    for {
-        // Block until message is available, then unmarshal the package
-        _, remote_addr, err := connection.ReadFromUDP(buf)
-        var message NetworkMessage
-        err = msgpack.Unmarshal(buf, &message)
-        if err != nil {
-            log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
-            continue
+    // TCP connections
+    tcpListen, err := net.Listen("tcp", tcpAddress)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer tcpListen.Close()
+    go func(channel chan bool) {
+        for {
+            connection, err := tcpListen.Accept()
+            if err != nil {
+                log.Fatal(err)
+            }
+            channel <- true
+            go network.handleTCP(connection)
         }
-        network.handleMessage(connection, remote_addr, &message)
-        if network.listenChannel != nil {
-            network.listenChannel <- message
+    }(tcpChannel)
+
+    // UDP packets listen
+    udpListen, err := net.ListenPacket("udp", udpAddress)
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer udpListen.Close()
+    go func(channel chan bool) {
+        for {
+            channel <- true
+            // Cannot call this in a go routine since UDP has no blocking accept
+            network.handleUDP(udpListen)
+        }
+    }(udpChannel)
+
+    // Listen has been called for both UDP and TCP
+    *listening <- true
+    // Infinite loop listening to TCP and UDP sockets
+    for {
+        select {
+        case <-tcpChannel:
+            // TCP message received
+        case <-udpChannel:
+            // UDP message received
         }
     }
 }
 
 // Send a message over an established UDP connection
-func (network *Network) SendMessageToConnection(message *NetworkMessage, address *net.UDPAddr, conn *net.UDPConn) {
+func (network *Network) SendMessageToUdpConnection(message *NetworkMessage, address net.Addr, conn net.PacketConn) {
     fmt.Printf("%v responds to %v: %v \n", network.Routing.Me.Address, address, message.String())
     msg, err := msgpack.Marshal(message)
     if err != nil {
         log.Printf("%v failed to marshal network message with %v\n", network.Routing.Me.Address, err)
     }
-    _, err = conn.WriteToUDP(msg, address)
+    _, err = conn.WriteTo(msg, address)
     if err != nil {
         log.Printf("%v UDP write failed with %v\n", network.Routing.Me.Address, err)
     }
 }
 
 // Send a one-way message
-func (network *Network) SendMessage(message *NetworkMessage, contact *Contact) (net.Conn, error) {
-    connection, err := net.Dial("udp", contact.Address)
+func (network *Network) SendMessage(protocol int, message *NetworkMessage, contact *Contact) (net.Conn, error) {
+    var port int
+    var protoStr string
+    if protocol == UDP {
+        port = contact.Address.UdpPort
+        protoStr = "udp"
+    } else {
+        port = contact.Address.TcpPort
+        protoStr = "tcp"
+    }
+    connection, err := net.Dial(protoStr, contact.Address.IP+":"+strconv.Itoa(port))
     if err != nil {
         log.Printf("%v connection to %v failed with %v\n", network.Routing.Me.Address, contact.Address, err)
         return nil, err
@@ -221,8 +306,8 @@ func (network *Network) SendMessage(message *NetworkMessage, contact *Contact) (
 }
 
 // Send over UDP, then block until response or timeout
-func (network *Network) SendReceiveMessage(message *NetworkMessage, contact *Contact) *NetworkMessage {
-    connection, err := network.SendMessage(message, contact)
+func (network *Network) SendReceiveMessage(protocol int, message *NetworkMessage, contact *Contact) *NetworkMessage {
+    connection, err := network.SendMessage(protocol, message, contact)
     if err != nil {
         return nil
     }
@@ -233,15 +318,37 @@ func (network *Network) SendReceiveMessage(message *NetworkMessage, contact *Con
         for {
             buf := make([]byte, RECEIVE_BUFFER_SIZE)
             for {
-                n, err := connection.Read(buf)
-                if err != nil {
-                    timeout := time.NewTimer(CONNECTION_RETRY_DELAY)
-                    <-timeout.C
-                    continue
+                n := 0
+                if protocol == UDP {
+                    // For UDP connections, just read one datagram (should be an RPC)
+                    n, err = connection.Read(buf)
+                    if err != nil {
+                        timeout := time.NewTimer(CONNECTION_RETRY_DELAY)
+                        <-timeout.C
+                        continue
+                    }
+                } else {
+                    // For TCP file transfers, we can keep reading until there is no more left
+                    for {
+                        newBuf := make([]byte, RECEIVE_BUFFER_SIZE)
+                        newN, err := connection.Read(newBuf)
+                        if newN <= 0 {
+                            break
+                        }
+                        timer.Reset(CONNECTION_TIMEOUT)
+                        if err != nil {
+                            timeout := time.NewTimer(CONNECTION_RETRY_DELAY)
+                            <-timeout.C
+                            continue
+                        }
+                        buf = append(buf[:n], newBuf[:newN]...)
+                        n = n + newN
+                    }
                 }
+                timer.Stop()
+                // Unmarshal the message and return it
                 var responseMsg NetworkMessage
                 err = msgpack.Unmarshal(buf[:n], &responseMsg)
-                timer.Stop()
                 if err != nil {
                     log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, contact.Address, err)
                     m <- nil
@@ -267,15 +374,15 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
         // Node pinged itself
         return true
     }
-    msg := &NetworkMessage{MsgType: rpc.PING, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom()}
-    response := network.SendReceiveMessage(msg, contact)
+    msg := &NetworkMessage{MsgType: rpc.PING_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom()}
+    response := network.SendReceiveMessage(UDP, msg, contact)
     if response == nil {
         return false
     }
     fmt.Printf("%v received from %v: %v\n", network.Routing.Me.Address, contact.Address, response.String())
-    if response.MsgType == rpc.PONG && response.RpcID.Equals(&msg.RpcID) {
+    if response.MsgType == rpc.PONG_MSG && response.RpcID.Equals(&msg.RpcID) {
         // Node responded to ping, so add it to routing table
-        network.Routing.AddContact(NewContact(response.Origin.ID, contact.Address))
+        network.Routing.AddContact(response.Origin)
         return true
     }
     return false
@@ -286,14 +393,14 @@ func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver 
     // Marshal the contact and store it in Data byte array later
     findTargetMsg, err := msgpack.Marshal(*findTarget)
     if err != nil {
-        log.Printf("%v Could not marshal contact: %v\n", network.Routing.Me, err)
+        log.Printf("%v could not marshal contact: %v\n", network.Routing.Me, err)
         return []Contact{}
     }
     // Unique id for this RPC
     rpcID := *NewKademliaIDRandom()
     msg := NetworkMessage{MsgType: rpc.FIND_CONTACT_MSG, Origin: network.Routing.Me, RpcID: rpcID, Data: findTargetMsg}
     // Blocks until response
-    response := network.SendReceiveMessage(&msg, receiver)
+    response := network.SendReceiveMessage(UDP, &msg, receiver)
     // Validate the response
     if response != nil && response.MsgType == rpc.FIND_CONTACT_MSG {
         if !response.RpcID.Equals(&rpcID) {
@@ -304,7 +411,7 @@ func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver 
         var newContacts []Contact
         err := msgpack.Unmarshal(response.Data, &newContacts)
         if err != nil {
-            log.Printf("%v Could not unmarshal contact array: %v\n", network.Routing.Me, err)
+            log.Printf("%v could not unmarshal contact array: %v\n", network.Routing.Me, err)
         }
         return newContacts
     } else if response != nil {
@@ -313,22 +420,21 @@ func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver 
     return []Contact{}
 }
 
+// Search for owners of a particular file, using its hash
 func (network *Network) SendFindDataMessage(hash *KademliaID, receiver *Contact) []Contact {
     // Marshal the contact and store it in Data byte array later
     hashMsg, err := msgpack.Marshal(*hash)
     if err != nil {
-        log.Printf("%v Could not marshal kademlia id: %v\n", network.Routing.Me, err)
+        log.Printf("%v could not marshal kademlia id: %v\n", network.Routing.Me, err)
         return []Contact{}
     }
-    // Unique id for this RPC
-    rpcID := *NewKademliaIDRandom()
-    msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: rpcID, Data: hashMsg}
+    message := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
     // Blocks until response
-    response := network.SendReceiveMessage(&msg, receiver)
+    response := network.SendReceiveMessage(UDP, &message, receiver)
     // Validate the response
     if response != nil && response.MsgType == rpc.FIND_DATA_MSG {
-        if !response.RpcID.Equals(&rpcID) {
-            log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.Routing.Me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
+        if !response.RpcID.Equals(&message.RpcID) {
+            log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.Routing.Me.Address, response.Origin.Address, response.RpcID.String(), message.RpcID.String())
         }
         fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
         // Unmarshal the contacts we got back, if any
@@ -344,11 +450,27 @@ func (network *Network) SendFindDataMessage(hash *KademliaID, receiver *Contact)
     return []Contact{}
 }
 
+// Tell another node to store <hash,me> as <key,value>
 func (network *Network) SendStoreMessage(hash *KademliaID, receiver *Contact) {
     hashMsg, err := msgpack.Marshal(hash)
     if err != nil {
-        log.Printf("%v Could not marshal kademlia ID %v\n", network.Routing.Me, hash)
+        log.Printf("%v could not marshal kademlia ID %v\n", network.Routing.Me, hash)
     }
     message := NetworkMessage{MsgType: rpc.STORE_DATA_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
-    network.SendMessage(&message, receiver)
+    network.SendMessage(UDP, &message, receiver)
+}
+
+// Request a file transfer from message receiver
+func (network *Network) SendDownloadMessage(hash *KademliaID, receiver *Contact) []byte {
+    hashMsg, err := msgpack.Marshal(hash)
+    if err != nil {
+        log.Printf("%v could not marshal kademlia ID %v\n", network.Routing.Me, hash)
+    }
+    message := NetworkMessage{MsgType: rpc.TRANSFER_DATA_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
+    response := network.SendReceiveMessage(TCP, &message, receiver)
+    fmt.Printf("%v downloaded from %v: %v\n", network.Routing.Me.Address, response.Origin.Address, response.String())
+    if response != nil && response.MsgType == rpc.TRANSFER_DATA_MSG && response.RpcID.Equals(&message.RpcID) {
+        return response.Data
+    }
+    return []byte{}
 }

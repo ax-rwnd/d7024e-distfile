@@ -5,11 +5,12 @@ import (
     "fmt"
     "rpc"
     "github.com/vmihailenco/msgpack"
+    "io/ioutil"
 )
 
 var testPort int = 7000
 
-func getNetworkTestPort() int {
+func getTestPort() int {
     testPort++
     return testPort
 }
@@ -19,9 +20,9 @@ func ping(sender *Network, receiver *Contact, c chan bool) {
 }
 
 func TestUDPing(t *testing.T) {
-    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
-    node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
-    node3 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    node3 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     // Nodes are now listening to UDP connections
     ping21 := make(chan bool)
     go ping(node2, &node1.Routing.Me, ping21)
@@ -59,22 +60,34 @@ func TestUDPing(t *testing.T) {
 }
 
 func TestSendReceiveMessage(t *testing.T) {
-    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
-    node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     // This message must get the correct response
-    msg := &NetworkMessage{MsgType: rpc.PING, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
-    response := node1.SendReceiveMessage(msg, &node2.Routing.Me)
-    if response.MsgType != rpc.PONG || !response.RpcID.Equals(&msg.RpcID) || !response.Origin.ID.Equals(node2.Routing.Me.ID) {
+    msg := &NetworkMessage{MsgType: rpc.PING_MSG, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
+    response := node1.SendReceiveMessage(UDP, msg, &node2.Routing.Me)
+    if response.MsgType != rpc.PONG_MSG || !response.RpcID.Equals(&msg.RpcID) || !response.Origin.ID.Equals(node2.Routing.Me.ID) {
         t.Fail()
     }
 }
 
-func TestSendReceiveMessageTimeout(t *testing.T) {
-    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
-    node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+func TestSendReceiveMessageTimeoutUDP(t *testing.T) {
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     // This message should not get a response, so node1 should timeout when listening
-    msg := &NetworkMessage{MsgType: rpc.PONG, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
-    response := node1.SendReceiveMessage(msg, &node2.Routing.Me)
+    msg := &NetworkMessage{MsgType: rpc.PONG_MSG, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
+    response := node1.SendReceiveMessage(UDP, msg, &node2.Routing.Me)
+    if response != nil {
+        fmt.Printf("%v\n", response.String())
+        t.Fail()
+    }
+}
+
+func TestSendReceiveMessageTimeoutTCP(t *testing.T) {
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    // This message should not get a response, so node1 should timeout when listening
+    msg := &NetworkMessage{MsgType: rpc.PONG_MSG, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
+    response := node1.SendReceiveMessage(TCP, msg, &node2.Routing.Me)
     if response != nil {
         fmt.Printf("%v\n", response.String())
         t.Fail()
@@ -82,12 +95,12 @@ func TestSendReceiveMessageTimeout(t *testing.T) {
 }
 
 func TestSendFindContactMessage(t *testing.T) {
-    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
-    node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     // Do not sort by ID when inputting contacts
-    contact1 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000001000000"), "127.0.0.1:8402"))
-    contact2 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000001000000000000"), "127.0.0.1:8402"))
-    contact0 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "127.0.0.1:8402"))
+    contact1 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000001000000"), "127.0.0.1", getTestPort(), getTestPort()))
+    contact2 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000001000000000000"), "127.0.0.1", getTestPort(), getTestPort()))
+    contact0 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "127.0.0.1", getTestPort(), getTestPort()))
     // Send find message
     contacts := node1.SendFindContactMessage(contact0.ID, &node2.Routing.Me)
     // Contacts should be sorted in the response
@@ -97,11 +110,11 @@ func TestSendFindContactMessage(t *testing.T) {
 }
 
 func TestUDPConnectionFail(t *testing.T) {
-    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
-    contact := node1.Routing.AddContact(NewContact(NewKademliaIDRandom(), "127.0.0.1:999999"))
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    contact := node1.Routing.AddContact(NewContact(NewKademliaIDRandom(), "127.0.0.1", 999998, 999999))
     // Connection will fail since port is invalid. - response should be nil
     msg := &NetworkMessage{MsgType: 0, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
-    response := node1.SendReceiveMessage(msg, contact)
+    response := node1.SendReceiveMessage(UDP, msg, contact)
     if response != nil {
         t.Fail()
     }
@@ -109,8 +122,8 @@ func TestUDPConnectionFail(t *testing.T) {
 
 func TestSendStoreMessage(t *testing.T) {
     // Send store message from one node to another, check if it was received and stored
-    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
-    node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2.listenChannel = make(chan NetworkMessage)
     hash := NewRandomKademliaID()
     // Send store message
@@ -131,8 +144,8 @@ func TestSendStoreMessage(t *testing.T) {
 
 func TestSendFindDataMessage(t *testing.T) {
     // Put a file hash and file owner into kvStore of node2. See if node1 finds it.
-    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
-    node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     hash := NewRandomKademliaID()
     marshaledContact, err := msgpack.Marshal([]Contact{node1.Routing.Me})
     if err != nil {
@@ -147,8 +160,8 @@ func TestSendFindDataMessage(t *testing.T) {
 
 func TestSendStoreFindMessages(t *testing.T) {
     // Send store message from one node to another, find if it was received and stored
-    node1 := NewNetwork("127.0.0.1", getNetworkTestPort())
-    node2 := NewNetwork("127.0.0.1", getNetworkTestPort())
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2.listenChannel = make(chan NetworkMessage)
     hash := NewRandomKademliaID()
     // Send store message
@@ -166,5 +179,22 @@ func TestSendStoreFindMessages(t *testing.T) {
     contacts = node1.SendFindDataMessage(hash, &node2.Routing.Me)
     if len(contacts) != 0 {
         t.Fail()
+    }
+}
+
+func TestTcpTransfer(t *testing.T) {
+    // Send store message from one node to another, find if it was received and stored
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    data, _ := ioutil.ReadFile("test.bin")
+    hash := NewKademliaIDFromBytes(data)
+    // Store data in node 2, then transfer it to node 1
+    node2.store.Insert(*hash, false, data)
+    // Check if download worked
+    downloadedData := node1.SendDownloadMessage(hash, &node2.Routing.Me)
+    for i := range data {
+        if data[i] != downloadedData[i] {
+            t.Fail()
+        }
     }
 }

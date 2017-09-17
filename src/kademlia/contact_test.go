@@ -6,24 +6,20 @@ import (
 )
 
 func TestNewContactAndEqual(t *testing.T) {
-    contact := NewContact(NewKademliaID("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"), "test:1234")
+    contact := NewContact(NewKademliaID("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"), "test", 0, 0)
     if !contact.ID.Equals(NewKademliaID("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")) {
         fmt.Println("Wrong ID!")
-        t.Fail()
-    }
-    if contact.Address != "test:1234" {
-        fmt.Println("Wrong address!")
         t.Fail()
     }
 }
 
 func TestAppendAndGetCandidates(t *testing.T) {
-    a := NewContact(NewKademliaID("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"), "test:1234")
-    b := NewContact(NewKademliaID("FFFFFFFFFFFFFFFFFF0000000000000000000000"), "test:1235")
+    a := NewContact(NewKademliaID("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"), "test", 0, 0)
+    b := NewContact(NewKademliaID("FFFFFFFFFFFFFFFFFF0000000000000000000000"), "test", 0, 0)
     cands := ContactCandidates{[]Contact{a, b}}
 
-    c := NewContact(NewKademliaID("00000000000000000000FFFFFFFFFFFFFFFFFFFF"), "test:1234")
-    d := NewContact(NewKademliaID("0DEADBEEFFFFFFFFFF0000000000000000000000"), "test:1235")
+    c := NewContact(NewKademliaID("00000000000000000000FFFFFFFFFFFFFFFFFFFF"), "test", 0, 0)
+    d := NewContact(NewKademliaID("0DEADBEEFFFFFFFFFF0000000000000000000000"), "test", 0, 0)
     candsb := ContactCandidates{[]Contact{c, d}}
 
     cands.Append(candsb.GetContacts(2))

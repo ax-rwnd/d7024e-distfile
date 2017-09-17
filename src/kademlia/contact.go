@@ -3,19 +3,22 @@ package kademlia
 import (
     "fmt"
     "sort"
-    "strings"
-    "strconv"
-    "errors"
 )
+
+type Address struct {
+    IP      string
+    TcpPort int
+    UdpPort int
+}
 
 type Contact struct {
     ID       *KademliaID
-    Address  string
+    Address  Address
     distance *KademliaID
 }
 
-func NewContact(id *KademliaID, address string) Contact {
-    return Contact{id, address, nil}
+func NewContact(id *KademliaID, ip string, tcpPort int, udpPort int) Contact {
+    return Contact{id, Address{IP: ip, TcpPort: tcpPort, UdpPort: udpPort}, nil}
 }
 
 func (contact *Contact) CalcDistance(target *KademliaID) {
@@ -27,7 +30,7 @@ func (contact *Contact) Less(otherContact *Contact) bool {
 }
 
 func (contact *Contact) String() string {
-    return fmt.Sprintf(`contact("%s", "%s")`, contact.ID, contact.Address)
+    return fmt.Sprintf(`contact(ID=%v, IP=%v, tcpPort=%v, udpPort=%v)`, contact.ID, contact.Address.IP, contact.Address.TcpPort, contact.Address.UdpPort)
 }
 
 type ContactCandidates struct {
@@ -60,18 +63,4 @@ func (candidates *ContactCandidates) Less(i, j int) bool {
 
 func (contact *Contact) Equals(target *Contact) bool {
     return contact.ID.Equals(target.ID) && contact.Address == target.Address
-}
-
-func (contact *Contact) ParseAddress() (ip string, port int, err error) {
-    err = errors.New(fmt.Sprintf("%v Error parsing address\n", contact.Address))
-    split := strings.Split(contact.Address, ":")
-    if len(split) == 2 {
-        var p int64
-        p, err = strconv.ParseInt(split[1], 10, 32)
-        if err == nil {
-            ip = split[0]
-            port = int(p)
-        }
-    }
-    return ip, port, err
 }

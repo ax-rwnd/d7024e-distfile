@@ -3,7 +3,6 @@ package kademlia
 import (
     "encoding/hex"
     "math/rand"
-    "io/ioutil"
     "crypto/sha1"
 )
 
@@ -40,15 +39,6 @@ func NewKademliaIDFromBytes(data []byte) *KademliaID {
         result[i] = hash[i]
     }
     return &result
-}
-
-func NewKademliaIDFromFile(filepath string) (*KademliaID, error) {
-    result := KademliaID{}
-    content, err := ioutil.ReadFile(filepath)
-    if err == nil {
-        return NewKademliaIDFromBytes(content), nil
-    }
-    return &result, err
 }
 
 func NewRandomKademliaID() *KademliaID {

@@ -6,18 +6,21 @@ import (
     "sync"
 )
 
+const ALPHA = 3
+const K = bucketSize
+
 type Kademlia struct {
     Net *Network
 }
 
-func NewKademlia(ip string, port int) *Kademlia {
+func NewKademlia(ip string, tcpPort int, udpPort int) *Kademlia {
     kademlia := new(Kademlia)
-    kademlia.Net = NewNetwork(ip, port)
+    kademlia.Net = NewNetwork(ip, tcpPort, udpPort)
     return kademlia
 }
 
 func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
-    me := kademlia.Net.Routing.Me;
+    me := kademlia.Net.Routing.Me
     // The lookup intiator starts by picking \alpha nodes from its closest non-empty k-bucket...
     closestContacts := kademlia.Net.Routing.FindClosestContacts(target, ALPHA)
     // This holds the nodes we have already queried
@@ -37,17 +40,17 @@ func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
         // The initiator then sends parallel, asynchronous FIND_NODE RPCs to the \alpha nodes it has chosen...
         // ... In the recursive step, the initiator resends the FIND_NODE to nodes that it has learned about
         // from its previous RPCs
-        for i := range initialContacts {
-            go func(findTarget *KademliaID, receiver *Contact, channel chan []Contact) int {
-                set := []reflect.SelectCase{reflect.SelectCase{
-                    Dir:  reflect.SelectSend,
-                    Chan: reflect.ValueOf(channel),
-                    Send: reflect.ValueOf(kademlia.Net.SendFindContactMessage(findTarget, receiver)),
-                }}
-                to, _, _ := reflect.Select(set)
-                return to
-            }(target, &initialContacts[i], rpcChannels[i])
-        }
+        go func(findTarget KademliaID, receivers []Contact, channels []chan []Contact) {
+            for i := range initialContacts {
+                reflect.Select(
+                    []reflect.SelectCase{{
+                        Dir:  reflect.SelectSend,
+                        Chan: reflect.ValueOf(channels[i]),
+                        Send: reflect.ValueOf(kademlia.Net.SendFindContactMessage(&findTarget, &receivers[i])),
+                    }})
+            }
+        }(*target, initialContacts, rpcChannels)
+
         // This will gather all the contacts from recursive calls
         newContacts := []Contact{}
         // Channels to recursive lookup calls
@@ -68,7 +71,7 @@ func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
             contactsToVisit := []Contact{}
             // Check if we have already visited these contacts. If not, queue them for future visits.
             // Simpler version than the rules in the paper
-            for i := 0; i < min(bucketSize, len(receivedContacts)); i++ {
+            for i := 0; i < min(K, len(receivedContacts)); i++ {
                 newContact := receivedContacts[i]
                 mutex.Lock()
                 if _, ok := contactsVisited[*newContact.ID]; !ok {
@@ -121,7 +124,7 @@ func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
         contactCandidates.contacts = append(contactCandidates.contacts, candidate)
     }
     contactCandidates.Sort()
-    return contactCandidates.contacts[0:min(bucketSize, len(candidates))]
+    return contactCandidates.contacts[0:min(K, len(candidates))]
 }
 
 // Find the owner of a file with specific hash.
@@ -135,7 +138,7 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
     for i, contact := range closestContacts {
         // Send concurrent find data requests RPCs
         go func(findTarget *KademliaID, receiver *Contact, channel chan []Contact) int {
-            set := []reflect.SelectCase{reflect.SelectCase{
+            set := []reflect.SelectCase{{
                 Dir:  reflect.SelectSend,
                 Chan: reflect.ValueOf(channel),
                 Send: reflect.ValueOf(kademlia.Net.SendFindDataMessage(hash, &contact)),
