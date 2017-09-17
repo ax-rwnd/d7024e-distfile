@@ -19,6 +19,7 @@ func NewKademlia(ip string, tcpPort int, udpPort int) *Kademlia {
     return kademlia
 }
 
+// Lookup the k participants which have a kademlia ID closest to another ID
 func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
     me := kademlia.Net.Routing.Me
     // The lookup intiator starts by picking \alpha nodes from its closest non-empty k-bucket...
@@ -175,7 +176,7 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
     return &owners
 }
 
-// Store the data locally, then have other nodes store the contact of one(s?) holding the data
+// Store the data locally, then have other nodes store the contact of ones holding the data
 func (kademlia *Kademlia) Store(data []byte) {
     hash := NewKademliaIDFromBytes(data)
     kademlia.Net.store.Insert(*hash, false, data)
@@ -183,4 +184,9 @@ func (kademlia *Kademlia) Store(data []byte) {
     for _, contact := range contacts {
         kademlia.Net.SendStoreMessage(hash, &contact)
     }
+}
+
+// Download data from another kademlia participant
+func (kademlia *Kademlia) Download(hash *KademliaID, from *Contact) []byte {
+    return kademlia.Net.SendDownloadMessage(hash, from)
 }

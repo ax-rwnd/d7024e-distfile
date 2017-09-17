@@ -50,6 +50,7 @@ func min(a, b int) int {
     return b
 }
 
+// Create a new network and start listening to incoming TCP connections and UDP packets
 func NewNetwork(ip string, tcpPort int, udpPort int) *Network {
     network := new(Network)
     // Random ID on network start
@@ -63,13 +64,15 @@ func NewNetwork(ip string, tcpPort int, udpPort int) *Network {
     return network
 }
 
-func (network *Network) handlePingMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
+// Someone sent a ping message, respond to it
+func (network *Network) receivePingMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Respond to the ping
     msg := NetworkMessage{MsgType: rpc.PONG_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
     go network.SendMessageToUdpConnection(&msg, remote_addr, connection)
 }
 
-func (network *Network) handleFindContactMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
+// Someone wants to know k of our contacts closest to a kademlia ID
+func (network *Network) receiveFindContactMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Unmarshal the contact from data field. Then find the k closest neighbors to it.
     var findTarget KademliaID
     err := msgpack.Unmarshal(message.Data, &findTarget)
@@ -77,7 +80,7 @@ func (network *Network) handleFindContactMessage(connection net.PacketConn, remo
         log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
         return
     }
-    closestContacts := network.Routing.FindClosestContacts(&findTarget, bucketSize)
+    closestContacts := network.Routing.FindClosestContacts(&findTarget, K)
     // Marshal the closest contacts and send them in the response
     closestContactsMsg, err := msgpack.Marshal(closestContacts)
     if err != nil {
@@ -88,7 +91,8 @@ func (network *Network) handleFindContactMessage(connection net.PacketConn, remo
     go network.SendMessageToUdpConnection(&msg, remote_addr, connection)
 }
 
-func (network *Network) handleStoreDataMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
+// Someone wants us to store a kademlia ID (file hash) along with their contact information in our <key,value> store
+func (network *Network) receiveStoreDataMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Store a non-marshalled kademlia id as key (file hash), and marshalled contacts as value (file owners)
     var key KademliaID
     err := msgpack.Unmarshal(message.Data, &key)
@@ -117,7 +121,8 @@ func (network *Network) handleStoreDataMessage(connection net.PacketConn, remote
     fmt.Printf("%v stored hash key %v from %v\n", network.Routing.Me.Address, key.String(), message.Origin.String())
 }
 
-func (network *Network) handleFindDataMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
+// Someone wants to query our <key,value> store for a file hash and know which contacts it can be downloaded from
+func (network *Network) receiveFindDataMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Read the file hash (kvStore key) requested
     var hash KademliaID
     err := msgpack.Unmarshal(message.Data, &hash)
@@ -146,25 +151,27 @@ func (network *Network) handleFindDataMessage(connection net.PacketConn, remote_
 
 }
 
-func (network *Network) handleMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
+// Handle an incoming RPC message
+func (network *Network) receiveMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Store the contact that just messaged the node (we don't know its TCP port)
     network.Routing.AddContact(message.Origin)
     fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, remote_addr, message.String())
     switch {
     case message.MsgType == rpc.PING_MSG:
-        network.handlePingMessage(connection, remote_addr, message)
+        network.receivePingMessage(connection, remote_addr, message)
     case message.MsgType == rpc.FIND_CONTACT_MSG:
-        network.handleFindContactMessage(connection, remote_addr, message)
+        network.receiveFindContactMessage(connection, remote_addr, message)
     case message.MsgType == rpc.STORE_DATA_MSG:
-        network.handleStoreDataMessage(connection, remote_addr, message)
+        network.receiveStoreDataMessage(connection, remote_addr, message)
     case message.MsgType == rpc.FIND_DATA_MSG:
-        network.handleFindDataMessage(connection, remote_addr, message)
+        network.receiveFindDataMessage(connection, remote_addr, message)
     default:
         log.Printf("%v received unknown message from %v: %v\n", network.Routing.Me.Address, remote_addr, message)
     }
 }
 
-func (network *Network) handleTCP(connection net.Conn) {
+// Someone initiated a TCP connection, check if they want to download data from us
+func (network *Network) receiveTCP(connection net.Conn) {
     buffer := make([]byte, RECEIVE_BUFFER_SIZE)
     _, err := connection.Read(buffer)
     if err != nil {
@@ -201,7 +208,8 @@ func (network *Network) handleTCP(connection net.Conn) {
     connection.Close()
 }
 
-func (network *Network) handleUDP(connection net.PacketConn) {
+// Someone sent us a UDP packet, check if it is an RPC message and handle it in that case
+func (network *Network) receiveUDP(connection net.PacketConn) {
     buf := make([]byte, RECEIVE_BUFFER_SIZE)
     _, remote_address, err := connection.ReadFrom(buf)
     if err != nil {
@@ -213,7 +221,7 @@ func (network *Network) handleUDP(connection net.PacketConn) {
         log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remote_address, err)
         return
     }
-    network.handleMessage(connection, remote_address, &message)
+    network.receiveMessage(connection, remote_address, &message)
     if network.listenChannel != nil {
         network.listenChannel <- message
     }
@@ -239,7 +247,7 @@ func (network *Network) Listen(listening *chan bool) {
                 log.Fatal(err)
             }
             channel <- true
-            go network.handleTCP(connection)
+            go network.receiveTCP(connection)
         }
     }(tcpChannel)
 
@@ -253,7 +261,7 @@ func (network *Network) Listen(listening *chan bool) {
         for {
             channel <- true
             // Cannot call this in a go routine since UDP has no blocking accept
-            network.handleUDP(udpListen)
+            network.receiveUDP(udpListen)
         }
     }(udpChannel)
 
