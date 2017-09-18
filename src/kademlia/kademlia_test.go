@@ -52,7 +52,7 @@ func createKademliaMesh(width int, height int) []*Kademlia {
 
 // Test looking up a contact with specific kademlia ID
 func TestLookupContact(t *testing.T) {
-    kademlias := createKademliaMesh(10, 1)
+    kademlias := createKademliaMesh(10, 10)
     numNodes := len(kademlias)
     var cc = []chan []Contact{make(chan []Contact), make(chan []Contact),}
     // First node does not yet have last node as a contact. Find it.
