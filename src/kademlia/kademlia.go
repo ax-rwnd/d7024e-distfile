@@ -136,19 +136,20 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
     for i := 0; i < len(closestContacts); i++ {
         rpcChannels = append(rpcChannels, make(chan []Contact))
     }
-    for i, contact := range closestContacts {
+    for i := range closestContacts {
         // Send concurrent find data requests RPCs
         go func(findTarget *KademliaID, receiver *Contact, channel chan []Contact) int {
             set := []reflect.SelectCase{{
                 Dir:  reflect.SelectSend,
                 Chan: reflect.ValueOf(channel),
-                Send: reflect.ValueOf(kademlia.Net.SendFindDataMessage(hash, &contact)),
+                Send: reflect.ValueOf(kademlia.Net.SendFindDataMessage(hash, receiver)),
             }}
             to, _, _ := reflect.Select(set)
             return to
-        }(hash, &contact, rpcChannels[i])
+        }(hash, &closestContacts[i], rpcChannels[i])
     }
     ownerMap := make(map[KademliaID]Contact)
+
     for range closestContacts {
         // Block until we get one or more responses from RPCs
         set := []reflect.SelectCase{}

@@ -15,7 +15,7 @@ const (
     UDP
 )
 const CONNECTION_TIMEOUT = time.Second * 2
-const CONNECTION_RETRY_DELAY = time.Second / 2
+const CONNECTION_RETRY_DELAY = time.Second
 const RECEIVE_BUFFER_SIZE = 1 << 20
 
 // Msgpack package requires public variables
@@ -40,7 +40,7 @@ func (msg *NetworkMessage) String() string {
     if len(msg.Data) > 1<<10 { // Not larger than 1 kB
         dataMsg = strconv.Itoa(len(msg.Data)) + " bytes"
     }
-    return fmt.Sprintf("MsgType=%v, Origin=%v, RpcID=%v, Data=%v", msg.MsgType, msg.Origin.String(), msg.RpcID.String(), dataMsg)
+    return fmt.Sprintf("MsgType=%v, Origin=%v, RpcID=%v, Data=%v", rpc.EnumToString(msg.MsgType), msg.Origin.String(), msg.RpcID.String(), dataMsg)
 }
 
 func min(a, b int) int {
@@ -111,7 +111,7 @@ func (network *Network) receiveStoreDataMessage(connection net.PacketConn, remot
         owners = []Contact{}
     }
     owners = append(owners, message.Origin)
-    fmt.Printf("%v\n", owners)
+    fmt.Printf("%v has contacts %v for hash %vh\n", network.Routing.Me.Address, owners, key.String())
     marshaledOwners, err := msgpack.Marshal(owners)
     if err != nil {
         log.Printf("%v failed to marshal value from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
@@ -134,6 +134,7 @@ func (network *Network) receiveFindDataMessage(connection net.PacketConn, remote
     value, err := network.store.Lookup(hash)
     if err != nil {
         // Key not in store, reply with empty message
+        fmt.Printf("%v cannot find <key,value> for key=%v\n", network.Routing.Me.Address, hash.String())
         msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
         go network.SendMessageToUdpConnection(&msg, remote_addr, connection)
         return

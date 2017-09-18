@@ -190,8 +190,12 @@ func TestTcpTransfer(t *testing.T) {
     hash := NewKademliaIDFromBytes(data)
     // Store data in node 2, then transfer it to node 1
     node2.store.Insert(*hash, false, data)
-    // Check if download worked
+    // Send TCP download request
     downloadedData := node1.SendDownloadMessage(hash, &node2.Routing.Me)
+    // Check if download worked
+    if len(downloadedData) != len(data) {
+        t.Fail()
+    }
     for i := range data {
         if data[i] != downloadedData[i] {
             t.Fail()

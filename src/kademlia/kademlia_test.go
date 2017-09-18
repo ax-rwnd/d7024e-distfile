@@ -5,6 +5,7 @@ import (
     "fmt"
     "time"
     "log"
+    "io/ioutil"
 )
 
 // Makes a grid/mesh of nodes and adds contacts for each node to 8 of its neighbours (fewer at borders).
@@ -51,7 +52,7 @@ func createKademliaMesh(width int, height int) []*Kademlia {
 
 // Test looking up a contact with specific kademlia ID
 func TestLookupContact(t *testing.T) {
-    kademlias := createKademliaMesh(10, 10)
+    kademlias := createKademliaMesh(10, 1)
     numNodes := len(kademlias)
     var cc = []chan []Contact{make(chan []Contact), make(chan []Contact),}
     // First node does not yet have last node as a contact. Find it.
@@ -77,51 +78,80 @@ func TestLookupContact(t *testing.T) {
 
 // Test storing and finding data
 func TestLookupStoreData(t *testing.T) {
+    data, _ := ioutil.ReadFile("test.bin")
+    // Create some network nodes
     kademlias := createKademliaMesh(5, 10)
-    numK := len(kademlias)
+    owner := kademlias[0]
+    reader := kademlias[len(kademlias)-1]
     // Store some data
-    owner1 := kademlias[0]
-    data := []byte("message")
-    owner1.Store(data)
+    owner.Store(data)
     // Wait for the messages to propagate
     timer := time.NewTimer(time.Second * 2)
     <-timer.C
     // Read data from another node
     hash := NewKademliaIDFromBytes(data)
-    reader := kademlias[numK-1]
     candidates := *reader.LookupData(hash)
-    // Check that we actually got the right contact
     fmt.Printf("Found owners %v\n", candidates)
-    if !candidates[0].ID.Equals(owner1.Net.Routing.Me.ID) {
+    downloadedData := reader.Net.SendDownloadMessage(hash, &candidates[0])
+
+    // Check that we actually got the right contact
+    if len(candidates) != 1 || !candidates[0].ID.Equals(owner.Net.Routing.Me.ID) {
         t.Fail()
         log.Printf("Invalid contact list %v\n", candidates)
     }
-    // TODO: Actually transfer the data, not just owner contact
+    // Check if download worked
+    if len(downloadedData) != len(data) {
+        t.Fail()
+    }
+    for i := range data {
+        if data[i] != downloadedData[i] {
+            t.Fail()
+        }
+    }
 }
 
-// Test storing and finding data
+// Test storing data on multiple nodes and finding it from another
 func TestLookupStoreDataMultiple(t *testing.T) {
-    kademlias := createKademliaMesh(3, 3)
-    numK := len(kademlias)
-    // Store some data
+    // Load a text file to store on network
+    data, _ := ioutil.ReadFile("test.txt")
+    hash := NewKademliaIDFromBytes(data)
+    // Create some network nodes
+    kademlias := createKademliaMesh(5, 5)
     owner1 := kademlias[0]
     owner2 := kademlias[1]
-    data := []byte("message")
+    requester := kademlias[len(kademlias)-1]
+    // Store the data
+    fmt.Printf("Storing on %v and %v: key=%v, value=%v\n", owner1.Net.Routing.Me.String(), owner2.Net.Routing.Me.String(), hash.String(), string(data))
     owner1.Store(data)
     owner2.Store(data)
     // Wait for the messages to propagate
-    timer := time.NewTimer(time.Second)
+    timer := time.NewTimer(time.Second * 1)
     <-timer.C
     // Read data from another node
-    hash := NewKademliaIDFromBytes(data)
-    reader := kademlias[numK-1]
-    candidates := *reader.LookupData(hash)
+    candidates := *requester.LookupData(hash)
+    fmt.Printf("Found candidates %v\n", candidates)
+    // Download data and check if program state is correct
+    downloadedData1 := requester.Net.SendDownloadMessage(hash, &candidates[0])
+    downloadedData2 := requester.Net.SendDownloadMessage(hash, &candidates[1])
+
     // Check that we actually got the right contact
-    fmt.Printf("Found owners %v\n", candidates)
     if !(candidates[0].ID.Equals(owner1.Net.Routing.Me.ID) && candidates[1].ID.Equals(owner2.Net.Routing.Me.ID) ||
         candidates[1].ID.Equals(owner1.Net.Routing.Me.ID) && candidates[0].ID.Equals(owner2.Net.Routing.Me.ID)) {
         t.Fail()
-        log.Printf("Invalid contact list %v\n", candidates)
     }
-    // TODO: Actually transfer the data, not just owner contact
+    // Check that only the correct two owner nodes made it into candidates
+    if len(candidates) != 2 {
+        t.Fail()
+    }
+    // Data must have correct length
+    if len(downloadedData1) != len(data) || len(downloadedData2) != len(data) {
+        t.Fail()
+    }
+    // Bits must be correct
+    for i := range data {
+        if data[i] != downloadedData1[i] || data[i] != downloadedData2[i] {
+            t.Fail()
+        }
+    }
+    fmt.Printf("Downloaded from %v and %v: %v\n", candidates[0].String(), candidates[1].String(), string(downloadedData1))
 }
