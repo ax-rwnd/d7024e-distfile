@@ -116,7 +116,7 @@ func TestLookupStoreDataMultiple(t *testing.T) {
     data, _ := ioutil.ReadFile("test.txt")
     hash := NewKademliaIDFromBytes(data)
     // Create some network nodes
-    kademlias := createKademliaMesh(5, 5)
+    kademlias := createKademliaMesh(3, 3)
     owner1 := kademlias[0]
     owner2 := kademlias[1]
     requester := kademlias[len(kademlias)-1]
@@ -131,8 +131,8 @@ func TestLookupStoreDataMultiple(t *testing.T) {
     candidates := *requester.LookupData(hash)
     fmt.Printf("Found candidates %v\n", candidates)
     // Download data and check if program state is correct
-    downloadedData1 := requester.Net.SendDownloadMessage(hash, &candidates[0])
-    downloadedData2 := requester.Net.SendDownloadMessage(hash, &candidates[1])
+    downloadedData1 := requester.Download(hash, &candidates[0])
+    downloadedData2 := requester.Download(hash, &candidates[1])
 
     // Check that we actually got the right contact
     if !(candidates[0].ID.Equals(owner1.Net.Routing.Me.ID) && candidates[1].ID.Equals(owner2.Net.Routing.Me.ID) ||
