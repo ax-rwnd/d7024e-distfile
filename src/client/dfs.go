@@ -7,7 +7,7 @@ import (
     "errors"
     "net/http"
     "github.com/BurntSushi/toml"
-    "../kademlia"
+    "kademlia"
 )
 
 var ArgumentError = errors.New("invalid arguments")
