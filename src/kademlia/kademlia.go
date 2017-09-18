@@ -178,13 +178,14 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
 }
 
 // Store the data locally, then have other nodes store the contact of ones holding the data
-func (kademlia *Kademlia) Store(data []byte) {
+func (kademlia *Kademlia) Store(data []byte) KademliaID {
     hash := NewKademliaIDFromBytes(data)
     kademlia.Net.store.Insert(*hash, false, data)
     contacts := kademlia.LookupContact(hash)
     for _, contact := range contacts {
-        kademlia.Net.SendStoreMessage(hash, &contact)
+        go kademlia.Net.SendStoreMessage(hash, &contact)
     }
+    return *hash
 }
 
 // Download data from another kademlia participant
