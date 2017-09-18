@@ -13,7 +13,7 @@ type Service struct {
     daemon.Daemon
 }
 
-func runDaemon() {
+func runDaemon(config *configDaemon) {
     srv, err := daemon.New("kademliad", "Kademlia Storage Daemon", dependencies...)
     if err != nil {
         errlog.Println("Error: ", err)
