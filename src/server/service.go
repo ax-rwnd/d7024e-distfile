@@ -13,7 +13,7 @@ type Service struct {
     daemon.Daemon
 }
 
-func runDaemon() {
+func runDaemon(config *configDaemon) {
     srv, err := daemon.New("kademliad", "Kademlia Storage Daemon", dependencies...)
     if err != nil {
         errlog.Println("Error: ", err)
@@ -22,7 +22,7 @@ func runDaemon() {
 
     service := &Service{srv}
     stdlog.Println("Starting kademlia storage node.")
-    if status, err := service.Manage(); err != nil {
+    if status, err := service.Manage(config); err != nil {
         errlog.Println("Error: ", err)
         os.Exit(1)
     } else {
@@ -30,7 +30,7 @@ func runDaemon() {
     }
 }
 
-func (service *Service) Manage() (string, error) {
+func (service *Service) Manage(config *configDaemon) (string, error) { // Start upp rest server and rpc server here, send the config file
     if len(os.Args) > 1 {
         command := os.Args[1]
         switch command {

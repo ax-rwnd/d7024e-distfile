@@ -19,6 +19,7 @@ func ping(sender *Network, receiver *Contact, c chan bool) {
     c <- sender.SendPingMessage(receiver)
 }
 
+// Test UDP packet pinging between nodes
 func TestUDPing(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
@@ -59,6 +60,7 @@ func TestUDPing(t *testing.T) {
     }
 }
 
+// Test sending a ping message between two nodes generates the correct response
 func TestSendReceiveMessage(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
@@ -70,6 +72,7 @@ func TestSendReceiveMessage(t *testing.T) {
     }
 }
 
+// This UDP message should not generate a response from the other node, it should time out waiting for it.
 func TestSendReceiveMessageTimeoutUDP(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
@@ -82,6 +85,7 @@ func TestSendReceiveMessageTimeoutUDP(t *testing.T) {
     }
 }
 
+// This TCP message should not generate a response from the other node, it should time out waiting for it.
 func TestSendReceiveMessageTimeoutTCP(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
@@ -94,6 +98,7 @@ func TestSendReceiveMessageTimeoutTCP(t *testing.T) {
     }
 }
 
+// Test that the correct response is given when finding contacts on other nodes
 func TestSendFindContactMessage(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
@@ -109,6 +114,7 @@ func TestSendFindContactMessage(t *testing.T) {
     }
 }
 
+// Test that UDP based SendReceiveMessage fails correctly on connection failure
 func TestUDPConnectionFail(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     contact := node1.Routing.AddContact(NewContact(NewKademliaIDRandom(), "127.0.0.1", 999998, 999999))
@@ -120,8 +126,8 @@ func TestUDPConnectionFail(t *testing.T) {
     }
 }
 
+// Send store message from one node to another, check if it was received and stored
 func TestSendStoreMessage(t *testing.T) {
-    // Send store message from one node to another, check if it was received and stored
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2.listenChannel = make(chan NetworkMessage)
@@ -142,8 +148,8 @@ func TestSendStoreMessage(t *testing.T) {
     }
 }
 
+// Put a file hash and file owner into kvStore of node2. See if node1 finds it.
 func TestSendFindDataMessage(t *testing.T) {
-    // Put a file hash and file owner into kvStore of node2. See if node1 finds it.
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     hash := NewRandomKademliaID()
@@ -158,8 +164,8 @@ func TestSendFindDataMessage(t *testing.T) {
     }
 }
 
+// Send store message from one node to another, find if it was received and stored
 func TestSendStoreFindMessages(t *testing.T) {
-    // Send store message from one node to another, find if it was received and stored
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2.listenChannel = make(chan NetworkMessage)
@@ -182,16 +188,20 @@ func TestSendStoreFindMessages(t *testing.T) {
     }
 }
 
+// Download data by TCP from one node to another
 func TestTcpTransfer(t *testing.T) {
-    // Send store message from one node to another, find if it was received and stored
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     data, _ := ioutil.ReadFile("test.bin")
     hash := NewKademliaIDFromBytes(data)
     // Store data in node 2, then transfer it to node 1
     node2.store.Insert(*hash, false, data)
-    // Check if download worked
+    // Send TCP download request
     downloadedData := node1.SendDownloadMessage(hash, &node2.Routing.Me)
+    // Check if download worked
+    if len(downloadedData) != len(data) {
+        t.Fail()
+    }
     for i := range data {
         if data[i] != downloadedData[i] {
             t.Fail()

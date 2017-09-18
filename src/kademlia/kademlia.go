@@ -19,6 +19,7 @@ func NewKademlia(ip string, tcpPort int, udpPort int) *Kademlia {
     return kademlia
 }
 
+// Lookup the k participants which have a kademlia ID closest to another ID
 func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
     me := kademlia.Net.Routing.Me
     // The lookup intiator starts by picking \alpha nodes from its closest non-empty k-bucket...
@@ -135,19 +136,20 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
     for i := 0; i < len(closestContacts); i++ {
         rpcChannels = append(rpcChannels, make(chan []Contact))
     }
-    for i, contact := range closestContacts {
+    for i := range closestContacts {
         // Send concurrent find data requests RPCs
         go func(findTarget *KademliaID, receiver *Contact, channel chan []Contact) int {
             set := []reflect.SelectCase{{
                 Dir:  reflect.SelectSend,
                 Chan: reflect.ValueOf(channel),
-                Send: reflect.ValueOf(kademlia.Net.SendFindDataMessage(hash, &contact)),
+                Send: reflect.ValueOf(kademlia.Net.SendFindDataMessage(hash, receiver)),
             }}
             to, _, _ := reflect.Select(set)
             return to
-        }(hash, &contact, rpcChannels[i])
+        }(hash, &closestContacts[i], rpcChannels[i])
     }
     ownerMap := make(map[KademliaID]Contact)
+
     for range closestContacts {
         // Block until we get one or more responses from RPCs
         set := []reflect.SelectCase{}
@@ -175,12 +177,18 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
     return &owners
 }
 
-// Store the data locally, then have other nodes store the contact of one(s?) holding the data
-func (kademlia *Kademlia) Store(data []byte) {
+// Store the data locally, then have other nodes store the contact of ones holding the data
+func (kademlia *Kademlia) Store(data []byte) KademliaID {
     hash := NewKademliaIDFromBytes(data)
     kademlia.Net.store.Insert(*hash, false, data)
     contacts := kademlia.LookupContact(hash)
     for _, contact := range contacts {
-        kademlia.Net.SendStoreMessage(hash, &contact)
+        go kademlia.Net.SendStoreMessage(hash, &contact)
     }
+    return *hash
+}
+
+// Download data from another kademlia participant
+func (kademlia *Kademlia) Download(hash *KademliaID, from *Contact) []byte {
+    return kademlia.Net.SendDownloadMessage(hash, from)
 }
