@@ -2,6 +2,7 @@ package main
 
 import (
     "os"
+    "io/ioutil"
     "strings"
     "fmt"
     "errors"
@@ -34,20 +35,24 @@ func main () {
 
     var err error
 
-    if len(args) < 1 {
-        printHelp(args)
-    } else if args[0] == "store" {
-        err = handleStore(&config, args[1:])
-    } else if args[0] == "cat" {
-        err = handleCat(&config, args[1:])
-    } else if args[0] == "pin" {
-        err = handlePin(&config, args[1:])
-    } else if args[0] == "unpin" {
-        err = handleUnpin(&config, args[1:])
+    if len(args) > 0 {
+        if args[0] == "store" {
+            err = handleStore(&config, args[1:])
+        } else if args[0] == "cat" {
+            _, err = handleCat(&config, args[1:])
+        } else if args[0] == "pin" {
+            err = handlePin(&config, args[1:])
+        } else if args[0] == "unpin" {
+            err = handleUnpin(&config, args[1:])
+        }
     }
 
-    if err != nil {
-        fmt.Println(err)
+    if len(args) <= 0 {
+        fmt.Println("Too few args.")
+        os.Exit(1)
+    } else if err != nil {
+        fmt.Println("Error:", err)
+        os.Exit(1)
     }
 }
 
@@ -72,19 +77,29 @@ func handleStore(config *clientConfig, args []string) error {
     }
 }
 
-func handleCat(config *clientConfig, args []string) error {
+func handleCat(config *clientConfig, args []string) (r string, err error) {
     if len(args) != 1 {
-        return ArgumentError
+        err = ArgumentError
+        return
     } else {
         if hash := args[0]; len(hash) != 2*kademlia.IDLength {
-            return HashError
+            err = HashError
+            return
         } else {
-            var request = fmt.Sprintf("%s/cat?hash=%s", config.Address, hash)
-            if response, err := http.Get(request); err != nil {
-                fmt.Println("Response from server:", response)
+            var response *http.Response
+
+            var request = fmt.Sprintf("http://%s/cat/%s", config.Address, hash)
+            response, err = http.Get(request)
+            if err != nil {
+                return
             }
 
-            return nil
+            var body []byte
+            body, err = ioutil.ReadAll(response.Body)
+            response.Body.Close()
+            r = string(body)
+
+            return
         }
     }
 }
