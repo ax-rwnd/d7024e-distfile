@@ -7,9 +7,9 @@ import (
 )
 
 // Error states
-var NotInitializedError = errors.New("KVS not initialized.")
-var DuplicateError = errors.New("Value is already in map.")
-var NotFoundError = errors.New("Value was not found in map.")
+var NotInitializedError = errors.New("KVS not initialized")
+var DuplicateError = errors.New("value is already in map")
+var NotFoundError = errors.New("value was not found in map")
 
 // Globals
 var EvictionTime, _ = time.ParseDuration("1h")
@@ -18,6 +18,7 @@ type KVStore struct {
     mapping map[KademliaID]kvData
     mutex   *sync.Mutex
 }
+
 type kvData struct {
     data      []byte
     timestamp time.Time
