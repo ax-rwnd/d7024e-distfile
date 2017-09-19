@@ -37,7 +37,9 @@ func main () {
 
     if len(args) > 0 {
         if args[0] == "store" {
-            err = handleStore(&config, args[1:])
+            var r string
+            r, err = handleStore(&config, args[1:])
+            fmt.Println("Your hash is:",r)
         } else if args[0] == "cat" {
             _, err = handleCat(&config, args[1:])
         } else if args[0] == "pin" {
@@ -56,24 +58,33 @@ func main () {
     }
 }
 
-func handleStore(config *clientConfig, args []string) error {
+func handleStore(config *clientConfig, args []string) (r string, err error) {
     if len(args) != 1 {
-        return ArgumentError
+        err = ArgumentError
+        return
     } else {
         fileName := args[0]
-        var request = fmt.Sprintf("%s/store", config.Address)
+        var request = fmt.Sprintf("http://%s/store", config.Address)
+        var fileReader *os.File
+        var resp *http.Response
+
 
         // Send file data
-        if fileReader, err := os.Open(fileName); err != nil {
-            return err
-        } else if resp, err := http.Post(request, "application/octet-stream", fileReader); err != nil {
-            return err
-        } else {
-            defer resp.Body.Close()
-            fmt.Println("Your file was stored: ", resp.Body)
+        fileReader, err = os.Open(fileName)
+        if err != nil {
+            return
         }
-
-        return nil
+        resp, err = http.Post(request, "application/octet-stream", fileReader)
+        if err != nil {
+            return
+        } else {
+            var body []byte
+            body, err = ioutil.ReadAll(resp.Body)
+            r = string(body)
+            fmt.Println("Your file was stored: ", r)
+            resp.Body.Close()
+        }
+        return
     }
 }
 
