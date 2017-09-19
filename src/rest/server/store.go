@@ -3,9 +3,11 @@ package main
 import (
     "net/http"
 	//"github.com/gorilla/mux"
-	"fmt"
+	//"fmt"
 	"io/ioutil"
 	"log"
+	//"crypto/sha1"
+	//"bytes"
 )
 
 // calculate the hash with SHA-1
@@ -17,15 +19,18 @@ func storeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	
-	data, err:= ioutil.ReadAll(r.Body)
+	data, err:= ioutil.ReadAll(r.Body) // here, get the data in byte array
+	
+	//kademlia.Store(data)
+	
+	//hash := sha1.Sum(data)
 	
 	if err != nil {
 		log.Fatal(err)
 		sendResponse(w, http.StatusInternalServerError, "500 - Couldn't read body")
 	}
 	
-	fmt.Println(string(data))
-    
-	sendResponse(w, http.StatusOK, "200 - OK ")
+	    
+	sendResponse(w, http.StatusOK, string(data))
 	
 }
