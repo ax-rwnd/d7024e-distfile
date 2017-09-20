@@ -2,6 +2,7 @@ package main
 
 import (
     "os"
+    "encoding/hex"
     "io/ioutil"
     "strings"
     "fmt"
@@ -80,8 +81,12 @@ func handleStore(config *clientConfig, args []string) (r string, err error) {
         } else {
             var body []byte
             body, err = ioutil.ReadAll(resp.Body)
-            r = string(body)
-            fmt.Println("Your file was stored: ", r)
+            if len(body) == kademlia.IDLength {
+                r = hex.EncodeToString(body)
+                fmt.Println("Your file was stored: ", r)
+            } else {
+                err = HashError
+            }
             resp.Body.Close()
         }
         return
