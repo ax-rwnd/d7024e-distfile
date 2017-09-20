@@ -1,4 +1,10 @@
+*.exe
+
 *.swp
 *.swo
 *.swn
+
 .idea/
+
+bin/
+pkg/
