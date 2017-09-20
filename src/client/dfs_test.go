@@ -30,11 +30,11 @@ func init() {
 func testHandleCat(w http.ResponseWriter, r *http.Request) {
     req := mux.Vars(r)
     hash := req["hash"]
-    hex_hash, _ := hex.DecodeString(hash)
+    real_hash, _ := hex.DecodeString(hash)
     expected, _ := hex.DecodeString("DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
 
     if r.Method == "GET" {
-        if bytes.Equal(hex_hash, expected) {
+        if bytes.Equal(real_hash, expected) {
             w.Write([]byte("CORRECT_HASH"))
         } else {
             w.Write([]byte("WRONG_HASH"))
@@ -55,14 +55,30 @@ func testHandleStore(w http.ResponseWriter, r *http.Request) {
     }
 }
 
+func testPinHandler(w http.ResponseWriter, r *http.Request) {
+    req := mux.Vars(r)
+    hash := req["hash"]
+
+    if r.Method == "POST" {
+        real_hash, _ := hex.DecodeString(hash)
+        expected, _ := hex.DecodeString("DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF")
+
+        //If the content exists, succeed
+        if bytes.Equal(real_hash, expected) {
+            w.Write([]byte("SUCCESS"))
+        } else {
+            w.Write([]byte("FAILURE"))
+        }
+    }
+}
+
 // Serve dummy endpoints for testing
 func serveTestEndpoints(config *clientConfig) {
     router := mux.NewRouter()
     router.HandleFunc("/cat/{hash}", testHandleCat)
     router.HandleFunc("/store", testHandleStore)
-    /*
-    router.HandleFunc("/pin/{hash}", pinHandler)
-    router.HandleFunc("/unpin/{hash}", unpinHandler)*/
+    router.HandleFunc("/pin/{hash}", testPinHandler)
+    router.HandleFunc("/unpin/{hash}", testPinHandler)
     http.ListenAndServe(config.Address, router)
 }
 
@@ -74,7 +90,7 @@ func TestCat (t *testing.T) {
 
     // Request the fixed hash
     var args = []string{"DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF"}
-    response, _ := handleCat(&config, args)
+    response := handleCat(&config, args)
 
     // Test the returned value
     if response == "NOT_GET" {
@@ -94,7 +110,7 @@ func TestStore(t *testing.T) {
 
     // Perform request
     var args = []string{"test.html"}
-    response, _ := handleStore(&config, args)
+    response := handleStore(&config, args)
 
     file, _ := os.Open("test.html")
     content, _ := ioutil.ReadAll(file)
@@ -113,6 +129,33 @@ func TestStore(t *testing.T) {
     // Make sure that the response is the same as the hasher
     if response != hexString {
         fmt.Println("Expected", hexString,"got",response)
+        t.Fail()
+    }
+}
+
+// 
+func TestPinUnpin (t *testing.T) {
+    // Start server
+    go serveTestEndpoints(&config)
+    time.Sleep(1*time.Second)
+
+    var args = []string{"DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF"}
+
+    // Pin the fixed hash
+    pinResponse := handlePin(&config, args)
+
+    // Test the returned value
+    if "SUCCESS" != pinResponse {
+        fmt.Println("Exptected",args[0], "got", pinResponse)
+        t.Fail()
+    }
+
+    // Unpin the fixed hash
+    unpinResponse := handleUnpin(&config, args)
+
+    // Test the returned value
+    if "SUCCESS" != unpinResponse {
+        fmt.Println("Exptected",args[0], "got", unpinResponse)
         t.Fail()
     }
 }

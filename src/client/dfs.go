@@ -2,15 +2,15 @@ package main
 
 import (
     "os"
-    "encoding/hex"
-    "io/ioutil"
     "strings"
     "fmt"
     "errors"
-    "net/http"
-    "github.com/BurntSushi/toml"
     "kademlia"
     "log"
+    "encoding/hex"
+    "net/http"
+    "io/ioutil"
+    "github.com/BurntSushi/toml"
 )
 
 // Standard errors
@@ -46,27 +46,33 @@ func main () {
 
     if len(args) > 0 {
         if args[0] == "store" {
-            r, err := handleStore(&cConfig, args[1:])
-            check(err)
+            r := handleStore(&cConfig, args[1:])
             print("Your hash is:",r)
         } else if args[0] == "cat" {
-            content, err := handleCat(&cConfig, args[1:])
+            content := handleCat(&cConfig, args[1:])
             print(content)
-            check(err)
         } else if args[0] == "pin" {
-            err := handlePin(&cConfig, args[1:])
-            check(err)
+            status := handlePin(&cConfig, args[1:])
+            if status == "SUCCESS" {
+                print("The content was pinned.")
+            } else {
+                print("The operation failed.")
+            }
         } else if args[0] == "unpin" {
-            err := handleUnpin(&cConfig, args[1:])
-            check(err)
+            status := handleUnpin(&cConfig, args[1:])
+            if status == "SUCCESS" {
+                print("The content is no longer pinned.")
+            } else {
+                print("The operation failed.")
+            }
         }
     } else {
-        log.Fatal("Usage: dsf (store|cat|pin|unpin)")
+        log.Fatal("Usage: dsf (store filename|cat hex-hash|pin hex-hash|unpin hex-hash)")
     }
 }
 
 // Store data on client
-func handleStore(config *clientConfig, args []string) (string, error) {
+func handleStore(config *clientConfig, args []string) string {
     if len(args) != 1 {
        check(ArgumentError)
     }
@@ -77,67 +83,87 @@ func handleStore(config *clientConfig, args []string) (string, error) {
 
     // Perform request
     request := fmt.Sprintf("http://%s/store", config.Address)
-    resp, requestErr := http.Post(request, "application/octet-stream", fileReader)
+    response, requestErr := http.Post(request, "application/octet-stream", fileReader)
     check(requestErr)
-    defer resp.Body.Close()
+    defer response.Body.Close()
 
     // Read response body
-    body, readErr := ioutil.ReadAll(resp.Body)
+    body, readErr := ioutil.ReadAll(response.Body)
     check(readErr)
 
-    // Report status to user
-    if len(body) == kademlia.IDLength {
-        return hex.EncodeToString(body), nil
-    } else {
-        return "", HashError
+    // Fail if length mismatch
+    if len(body) != kademlia.IDLength {
+        check(HashError)
     }
+
+    // Report status to user
+    return hex.EncodeToString(body)
 }
 
-func handleCat(config *clientConfig, args []string) (string, error) {
+// Read data from network
+func handleCat(config *clientConfig, args []string) string {
     if len(args) != 1 {
         check(ArgumentError)
     }
 
-    if hash := args[0]; len(hash) != 2*kademlia.IDLength {
-        return "", HashError
-    } else {
-        // Perform request
-        request := fmt.Sprintf("http://%s/cat/%s", config.Address, hash)
-        response, requestErr := http.Get(request)
-        check(requestErr)
-
-        // Read response
-        body, readErr := ioutil.ReadAll(response.Body)
-        check(readErr)
-        defer response.Body.Close()
-        return string(body), nil
+    // Fail if length mismatch
+    hash := args[0]
+    if len(hash) != 2*kademlia.IDLength {
+        check(HashError)
     }
+
+    // Perform request
+    request := fmt.Sprintf("http://%s/cat/%s", config.Address, hash)
+    response, requestErr := http.Get(request)
+    check(requestErr)
+    defer response.Body.Close()
+
+    // Read response
+    body, readErr := ioutil.ReadAll(response.Body)
+    check(readErr)
+    return string(body)
 }
 
-func handlePin(config *clientConfig, args []string) error {
+func handlePin(config *clientConfig, args []string) string {
     if len(args) != 1 {
-        return ArgumentError
-    } else {
-        if hash := args[0]; len(hash) != 2*kademlia.IDLength {
-            return HashError
-        } else {
-            request := fmt.Sprintf("%s/pin", config.Address)
-            http.Post(request, "text/plain", strings.NewReader(hash))
-            return nil
-        }
+        check(ArgumentError)
     }
+
+    hash := args[0]
+    if len(hash) != 2*kademlia.IDLength {
+        check(HashError)
+    }
+
+    // Perform request
+    request := fmt.Sprintf("http://%s/pin/%s", config.Address, hash)
+    response, requestErr := http.Post(request, "text/plain", strings.NewReader("PIN"))
+    check(requestErr)
+    defer response.Body.Close()
+
+    // Return response
+    body, readErr := ioutil.ReadAll(response.Body)
+    check(readErr)
+    return string(body)
 }
 
-func handleUnpin(config *clientConfig, args []string) error {
+func handleUnpin(config *clientConfig, args []string) string {
     if len(args) != 1 {
-        return ArgumentError
-    } else {
-        if hash := args[0]; len(hash) != 2*kademlia.IDLength {
-            return HashError
-        } else {
-            request := fmt.Sprintf("%s/unpin", config.Address, hash)
-            http.Post(request, "text/plain", strings.NewReader(hash))
-            return nil
-        }
+        check(ArgumentError)
     }
+
+    hash := args[0]
+    if len(hash) != 2*kademlia.IDLength {
+        check(HashError)
+    }
+
+    // Perform request
+    request := fmt.Sprintf("http://%s/unpin/%s", config.Address, hash)
+    response, requestErr := http.Post(request, "text/plain", strings.NewReader("UNPIN"))
+    check(requestErr)
+    defer response.Body.Close()
+
+    // Return response
+    body, readErr := ioutil.ReadAll(response.Body)
+    check(readErr)
+    return string(body)
 }
