@@ -10,113 +10,107 @@ import (
     "net/http"
     "github.com/BurntSushi/toml"
     "kademlia"
+    "log"
 )
 
+// Standard errors
 var ArgumentError = errors.New("invalid arguments")
 var HashError = errors.New("hash wrong length")
 
+// Handle errors
+func check (err error) bool {
+    if err != nil {
+        log.Fatal(err)
+        return false
+    }
+    return true
+}
+
+// Config through TOML
 const config_file = "dfs.toml"
+var cConfig clientConfig
 
 type clientConfig struct {
     Address     string
 }
 
-func printHelp(args []string) {
-    fmt.Println(args, "\nUsage: ...")
+func init() {
+    if _, err := toml.DecodeFile(config_file, &cConfig); err != nil {
+        log.Fatal("Error while parsing", config_file, ":", err)
+        os.Exit(1)
+    }
 }
 
 func main () {
     args := os.Args[1:]
 
-    var config clientConfig
-    if _, err := toml.DecodeFile(config_file, &config); err != nil {
-        fmt.Println("Error while parsing", config_file, ":", err)
-        os.Exit(1)
-    }
-
-    var err error
-
     if len(args) > 0 {
         if args[0] == "store" {
-            var r string
-            r, err = handleStore(&config, args[1:])
-            fmt.Println("Your hash is:",r)
+            r, err := handleStore(&cConfig, args[1:])
+            check(err)
+            print("Your hash is:",r)
         } else if args[0] == "cat" {
-            _, err = handleCat(&config, args[1:])
+            content, err := handleCat(&cConfig, args[1:])
+            print(content)
+            check(err)
         } else if args[0] == "pin" {
-            err = handlePin(&config, args[1:])
+            err := handlePin(&cConfig, args[1:])
+            check(err)
         } else if args[0] == "unpin" {
-            err = handleUnpin(&config, args[1:])
+            err := handleUnpin(&cConfig, args[1:])
+            check(err)
         }
-    }
-
-    if len(args) <= 0 {
-        fmt.Println("Too few args.")
-        os.Exit(1)
-    } else if err != nil {
-        fmt.Println("Error:", err)
-        os.Exit(1)
+    } else {
+        log.Fatal("Usage: dsf (store|cat|pin|unpin)")
     }
 }
 
-func handleStore(config *clientConfig, args []string) (r string, err error) {
+// Store data on client
+func handleStore(config *clientConfig, args []string) (string, error) {
     if len(args) != 1 {
-        err = ArgumentError
-        return
+       check(ArgumentError)
+    }
+
+    // Load file
+    fileReader, fileErr := os.Open(args[0])
+    check(fileErr)
+
+    // Perform request
+    request := fmt.Sprintf("http://%s/store", config.Address)
+    resp, requestErr := http.Post(request, "application/octet-stream", fileReader)
+    check(requestErr)
+    defer resp.Body.Close()
+
+    // Read response body
+    body, readErr := ioutil.ReadAll(resp.Body)
+    check(readErr)
+
+    // Report status to user
+    if len(body) == kademlia.IDLength {
+        return hex.EncodeToString(body), nil
     } else {
-        fileName := args[0]
-        var request = fmt.Sprintf("http://%s/store", config.Address)
-        var fileReader *os.File
-        var resp *http.Response
-
-
-        // Send file data
-        fileReader, err = os.Open(fileName)
-        if err != nil {
-            return
-        }
-        resp, err = http.Post(request, "application/octet-stream", fileReader)
-        if err != nil {
-            return
-        } else {
-            var body []byte
-            body, err = ioutil.ReadAll(resp.Body)
-            if len(body) == kademlia.IDLength {
-                r = hex.EncodeToString(body)
-                fmt.Println("Your file was stored: ", r)
-            } else {
-                err = HashError
-            }
-            resp.Body.Close()
-        }
-        return
+        return "", HashError
     }
 }
 
-func handleCat(config *clientConfig, args []string) (r string, err error) {
+func handleCat(config *clientConfig, args []string) (string, error) {
     if len(args) != 1 {
-        err = ArgumentError
-        return
+        check(ArgumentError)
+    }
+
+    if hash := args[0]; len(hash) != 2*kademlia.IDLength {
+        return "", HashError
     } else {
-        if hash := args[0]; len(hash) != 2*kademlia.IDLength {
-            err = HashError
-            return
-        } else {
-            var response *http.Response
+        // Perform request
+        request := fmt.Sprintf("http://%s/cat/%s", config.Address, hash)
+        response, requestErr := http.Get(request)
+        check(requestErr)
 
-            var request = fmt.Sprintf("http://%s/cat/%s", config.Address, hash)
-            response, err = http.Get(request)
-            if err != nil {
-                return
-            }
-
-            var body []byte
-            body, err = ioutil.ReadAll(response.Body)
-            response.Body.Close()
-            r = string(body)
-
-            return
-        }
+        // Read response
+        body, readErr := ioutil.ReadAll(response.Body)
+        check(readErr)
+        defer response.Body.Close()
+        return string(body), nil
     }
 }
 
@@ -127,7 +121,7 @@ func handlePin(config *clientConfig, args []string) error {
         if hash := args[0]; len(hash) != 2*kademlia.IDLength {
             return HashError
         } else {
-            var request = fmt.Sprintf("%s/pin", config.Address)
+            request := fmt.Sprintf("%s/pin", config.Address)
             http.Post(request, "text/plain", strings.NewReader(hash))
             return nil
         }
@@ -141,7 +135,7 @@ func handleUnpin(config *clientConfig, args []string) error {
         if hash := args[0]; len(hash) != 2*kademlia.IDLength {
             return HashError
         } else {
-            var request = fmt.Sprintf("%s/unpin", config.Address, hash)
+            request := fmt.Sprintf("%s/unpin", config.Address, hash)
             http.Post(request, "text/plain", strings.NewReader(hash))
             return nil
         }
