@@ -6,6 +6,7 @@ import (
     "rpc"
     "github.com/vmihailenco/msgpack"
     "io/ioutil"
+    "encoding/hex"
 )
 
 var testPort int = 7000
@@ -103,9 +104,9 @@ func TestSendFindContactMessage(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     // Do not sort by ID when inputting contacts
-    contact1 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000001000000"), "127.0.0.1", getTestPort(), getTestPort()))
-    contact2 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000001000000000000"), "127.0.0.1", getTestPort(), getTestPort()))
-    contact0 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "127.0.0.1", getTestPort(), getTestPort()))
+    _, contact1 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000001000000"), "127.0.0.1", getTestPort(), getTestPort()), nil)
+    _, contact2 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000001000000000000"), "127.0.0.1", getTestPort(), getTestPort()), nil)
+    _, contact0 := node2.Routing.AddContact(NewContact(NewKademliaID("FFFFFFFF00000000000000000000000000000000"), "127.0.0.1", getTestPort(), getTestPort()), nil)
     // Send find message
     contacts := node1.SendFindContactMessage(contact0.ID, &node2.Routing.Me)
     // Contacts should be sorted in the response
@@ -117,7 +118,7 @@ func TestSendFindContactMessage(t *testing.T) {
 // Test that UDP based SendReceiveMessage fails correctly on connection failure
 func TestUDPConnectionFail(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
-    contact := node1.Routing.AddContact(NewContact(NewKademliaIDRandom(), "127.0.0.1", 999998, 999999))
+    _, contact := node1.Routing.AddContact(NewContact(NewKademliaIDRandom(), "127.0.0.1", 999998, 999999), nil)
     // Connection will fail since port is invalid. - response should be nil
     msg := &NetworkMessage{MsgType: 0, Origin: node1.Routing.Me, RpcID: *NewKademliaIDRandom()}
     response := node1.SendReceiveMessage(UDP, msg, contact)
@@ -204,6 +205,52 @@ func TestTcpTransfer(t *testing.T) {
     }
     for i := range data {
         if data[i] != downloadedData[i] {
+            t.Fail()
+        }
+    }
+}
+
+// If routing table bucket is full, ping the last contact, if it does not respond, add the contact.
+func TestNetworkAddContactSuccess(t *testing.T) {
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    //node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    id, _ := hex.DecodeString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+    var i byte
+    for i = 0; i < bucketSize+1; i++ {
+        // Decrease the new ID to one lower than previous
+        newId := make([]byte, len(id))
+        copy(newId, id)
+        newId[len(newId)-1] = id[len(id)-1] - i
+        // Add contact with this ID
+        contact := NewContact(NewKademliaID(hex.EncodeToString(newId)), "127.0.0.1", getTestPort(), getTestPort())
+        contactWasAdded, _ := node1.Routing.AddContact(contact, node1.SendPingMessage)
+        // The last contact will be pinged to see if it is alive, since bucket is full.
+        // Since it pings to a port no one listens to it will get no response, so the contact should be added.
+        if !contactWasAdded {
+            t.Fail()
+        }
+    }
+}
+
+// If routing table bucket is full, ping the last contact, if it does respond, do not add the contact.
+func TestNetworkAddContactFail(t *testing.T) {
+    node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    //node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    id, _ := hex.DecodeString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
+    var i byte
+    for i = 0; i < bucketSize+1; i++ {
+        // Decrease the new ID to one lower than previous
+        newId := make([]byte, len(id))
+        copy(newId, id)
+        newId[len(newId)-1] = id[len(id)-1] - i
+        // Add contact with this ID
+        nodei := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+        kademliaId := NewKademliaID(hex.EncodeToString(newId))
+        nodei.Routing.Me.ID = kademliaId
+        contactWasAdded, _ := node1.Routing.AddContact(nodei.Routing.Me, node1.SendPingMessage)
+        // The last contact will be pinged to see if it is alive, since bucket is full.
+        // Since the node will respond to ping, it will not be added
+        if i == bucketSize && contactWasAdded {
             t.Fail()
         }
     }

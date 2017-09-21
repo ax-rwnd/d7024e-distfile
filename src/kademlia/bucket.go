@@ -14,23 +14,34 @@ func newBucket() *bucket {
     return bucket
 }
 
-func (bucket *bucket) AddContact(contact Contact) {
+func (bucket *bucket) addContact(contact Contact, pingFunc func(*Contact) bool) bool {
     var element *list.Element
     for e := bucket.list.Front(); e != nil; e = e.Next() {
         nodeID := e.Value.(Contact).ID
-
         if (contact).ID.Equals(nodeID) {
             element = e
         }
     }
-
     if element == nil {
         if bucket.list.Len() < bucketSize {
             bucket.list.PushFront(contact)
+        } else if pingFunc != nil {
+            last := bucket.list.Back().Value.(Contact)
+            responded := pingFunc(&last)
+            if responded {
+                bucket.list.MoveToFront(bucket.list.Back())
+                // Could not add contact, bucket was full and last responded to ping
+                return false
+            } else {
+                // Remove the last contact since it did not respond to ping
+                bucket.list.Remove(bucket.list.Back())
+                bucket.list.PushFront(contact)
+            }
         }
     } else {
         bucket.list.MoveToFront(element)
     }
+    return true
 }
 
 func (bucket *bucket) GetContactAndCalcDistance(target *KademliaID) []Contact {

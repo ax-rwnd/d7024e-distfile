@@ -190,7 +190,7 @@ func (network *Network) receiveTCP(connection net.Conn) {
         return
     }
     // Store the contact that just messaged the node
-    network.Routing.AddContact(message.Origin)
+    network.Routing.AddContact(message.Origin, network.SendPingMessage)
     fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, connection.RemoteAddr().String(), message.String())
     switch {
     case message.MsgType == rpc.TRANSFER_DATA_MSG:
@@ -216,7 +216,7 @@ func (network *Network) receiveUDP(connection net.PacketConn) {
         return
     }
     // Store the contact that just messaged the node
-    network.Routing.AddContact(message.Origin)
+    network.Routing.AddContact(message.Origin, network.SendPingMessage)
     fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, remote_address, message.String())
     switch {
     case message.MsgType == rpc.PING_MSG:
@@ -398,7 +398,7 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
     fmt.Printf("%v received from %v: %v\n", network.Routing.Me.Address, contact.Address, response.String())
     if response.MsgType == rpc.PONG_MSG && response.RpcID.Equals(&msg.RpcID) {
         // Node responded to ping, so add it to routing table
-        network.Routing.AddContact(response.Origin)
+        //network.Routing.AddContact(response.Origin)
         return true
     }
     return false

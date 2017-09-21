@@ -20,7 +20,7 @@ func TestRoutingTableFindClosestContacts(t *testing.T) {
     for i := 1; i < numContacts; i++ {
         contact := NewContact(NewKademliaID(fmt.Sprintf("%040x", i)), "127.0.0.1", 0, 0)
         allcontacts[i] = contact
-        rt.AddContact(contact)
+        rt.AddContact(contact, nil)
     }
     // Find the closest contacts to 'toFind'. Contacts are sorted (test?) according to min distance
     contacts := rt.FindClosestContacts(idToFind, maxResults)

@@ -3,9 +3,9 @@ package kademlia
 import (
     "testing"
     "fmt"
+    "io/ioutil"
     "time"
     "log"
-    "io/ioutil"
 )
 
 // Makes a grid/mesh of nodes and adds contacts for each node to 8 of its neighbours (fewer at borders).
@@ -19,8 +19,8 @@ func createKademliaMesh(width int, height int) []*Kademlia {
             k[i] = NewKademlia("127.0.0.1", getTestPort(), getTestPort())
             // Connect along x axis
             if x > 0 {
-                k[i-1].Net.Routing.AddContact(k[i].Net.Routing.Me)
-                k[i].Net.Routing.AddContact(k[i-1].Net.Routing.Me)
+                k[i-1].Net.Routing.AddContact(k[i].Net.Routing.Me, nil)
+                k[i].Net.Routing.AddContact(k[i-1].Net.Routing.Me, nil)
             }
         }
         if y > 0 {
@@ -30,19 +30,19 @@ func createKademliaMesh(width int, height int) []*Kademlia {
                 down := (y-1)*width + x
                 downLeft := down - 1
                 downRight := down + 1
-                k[me].Net.Routing.AddContact(k[down].Net.Routing.Me)
-                k[down].Net.Routing.AddContact(k[me].Net.Routing.Me)
+                k[me].Net.Routing.AddContact(k[down].Net.Routing.Me, nil)
+                k[down].Net.Routing.AddContact(k[me].Net.Routing.Me, nil)
                 if x == 0 {
-                    k[me].Net.Routing.AddContact(k[downRight].Net.Routing.Me)
-                    k[downRight].Net.Routing.AddContact(k[me].Net.Routing.Me)
+                    k[me].Net.Routing.AddContact(k[downRight].Net.Routing.Me, nil)
+                    k[downRight].Net.Routing.AddContact(k[me].Net.Routing.Me, nil)
                 } else if x == width-1 {
-                    k[me].Net.Routing.AddContact(k[downLeft].Net.Routing.Me)
-                    k[downLeft].Net.Routing.AddContact(k[me].Net.Routing.Me)
+                    k[me].Net.Routing.AddContact(k[downLeft].Net.Routing.Me, nil)
+                    k[downLeft].Net.Routing.AddContact(k[me].Net.Routing.Me, nil)
                 } else {
-                    k[me].Net.Routing.AddContact(k[downRight].Net.Routing.Me)
-                    k[downRight].Net.Routing.AddContact(k[me].Net.Routing.Me)
-                    k[me].Net.Routing.AddContact(k[downLeft].Net.Routing.Me)
-                    k[downLeft].Net.Routing.AddContact(k[me].Net.Routing.Me)
+                    k[me].Net.Routing.AddContact(k[downRight].Net.Routing.Me, nil)
+                    k[downRight].Net.Routing.AddContact(k[me].Net.Routing.Me, nil)
+                    k[me].Net.Routing.AddContact(k[downLeft].Net.Routing.Me, nil)
+                    k[downLeft].Net.Routing.AddContact(k[me].Net.Routing.Me, nil)
                 }
             }
         }
@@ -76,6 +76,7 @@ func TestLookupContact(t *testing.T) {
     }
 }
 
+//
 // Test storing and finding data
 func TestLookupStoreData(t *testing.T) {
     data, _ := ioutil.ReadFile("test.bin")
@@ -116,7 +117,7 @@ func TestLookupStoreDataMultiple(t *testing.T) {
     data, _ := ioutil.ReadFile("test.txt")
     hash := NewKademliaIDFromBytes(data)
     // Create some network nodes
-    kademlias := createKademliaMesh(3, 3)
+    kademlias := createKademliaMesh(10, 10)
     owner1 := kademlias[0]
     owner2 := kademlias[1]
     requester := kademlias[len(kademlias)-1]
@@ -155,3 +156,4 @@ func TestLookupStoreDataMultiple(t *testing.T) {
     }
     fmt.Printf("Downloaded from %v and %v: %v\n", candidates[0].String(), candidates[1].String(), string(downloadedData1))
 }
+

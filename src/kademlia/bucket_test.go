@@ -19,10 +19,10 @@ func TestAddContact(t *testing.T) {
     c := NewContact(NewKademliaID("0000000000000000000000000000000000000011"), "localhost", 0, 0)
     d := NewContact(NewKademliaID("0000000000000000000000000000000000000111"), "localhost", 0, 0)
 
-    storage.AddContact(a)
-    storage.AddContact(b)
-    storage.AddContact(c)
-    storage.AddContact(d)
+    storage.addContact(a, nil)
+    storage.addContact(b, nil)
+    storage.addContact(c, nil)
+    storage.addContact(d, nil)
 
     if storage.list.Remove(storage.list.Back()) != a ||
         storage.list.Remove(storage.list.Back()) != b ||
@@ -38,8 +38,8 @@ func TestGetContactAndCalcDistance(t *testing.T) {
     b := NewContact(NewKademliaID("0101010101010101010101010101010101010101"), "localhost", 0, 0)
     e := NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "localhost", 0, 0)
 
-    storage.AddContact(a)
-    storage.AddContact(b)
+    storage.addContact(a, nil)
+    storage.addContact(b, nil)
 
     testVals := storage.GetContactAndCalcDistance(e.ID)
     if testVals[1].ID != a.ID {
@@ -59,7 +59,7 @@ func TestLen(t *testing.T) {
     storage := newBucket()
 
     for i := 0; i < 20; i++ {
-        storage.AddContact(NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "localhost", 0, 0))
+        storage.addContact(NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "localhost", 0, 0), nil)
     }
 
     if storage.Len() != 1 {
@@ -68,11 +68,11 @@ func TestLen(t *testing.T) {
     }
 
     storage = newBucket()
-    storage.AddContact(NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "localhost", 0, 0))
-    storage.AddContact(NewContact(NewKademliaID("1000000000000000000000000000000000000000"), "localhost", 0, 0))
-    storage.AddContact(NewContact(NewKademliaID("2000000000000000000000000000000000000000"), "localhost", 0, 0))
-    storage.AddContact(NewContact(NewKademliaID("3000000000000000000000000000000000000000"), "localhost", 0, 0))
-    storage.AddContact(NewContact(NewKademliaID("4000000000000000000000000000000000000000"), "localhost", 0, 0))
+    storage.addContact(NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "localhost", 0, 0), nil)
+    storage.addContact(NewContact(NewKademliaID("1000000000000000000000000000000000000000"), "localhost", 0, 0), nil)
+    storage.addContact(NewContact(NewKademliaID("2000000000000000000000000000000000000000"), "localhost", 0, 0), nil)
+    storage.addContact(NewContact(NewKademliaID("3000000000000000000000000000000000000000"), "localhost", 0, 0), nil)
+    storage.addContact(NewContact(NewKademliaID("4000000000000000000000000000000000000000"), "localhost", 0, 0), nil)
 
     if storage.Len() != 5 {
         fmt.Println("Wrong length", storage.Len(), " returned, expected 5")
