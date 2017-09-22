@@ -47,7 +47,7 @@ func main () {
     if len(args) > 0 {
         if args[0] == "store" {
             r := handleStore(&cConfig, args[1:])
-            print("Your hash is:",r)
+            println("Your hash is:",r)
         } else if args[0] == "cat" {
             content := handleCat(&cConfig, args[1:])
             print(content)
@@ -93,6 +93,7 @@ func handleStore(config *clientConfig, args []string) string {
 
     // Fail if length mismatch
     if len(body) != kademlia.IDLength {
+        print("body was:", body)
         check(HashError)
     }
 
