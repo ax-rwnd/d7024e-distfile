@@ -5,6 +5,8 @@ import (
     "github.com/takama/daemon"
     "os"
     "syscall"
+    "kademlia"
+    "rest"
 )
 
 var dependencies = []string{"dummy.service"}
@@ -48,6 +50,9 @@ func (service *Service) Manage(config *daemonConfig) (string, error) { // Start 
             return "Usage: kademliad install | remove | start | stop | status", nil
         }
     }
+
+    k := kademlia.NewKademlia(config.Address, config.TcpPort, config.UdpPort)
+    go rest.Initialize(k, config.RestPort)
 
     interrupt := make(chan os.Signal, 1)
     signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)

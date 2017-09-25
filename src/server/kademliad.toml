@@ -1,4 +1,6 @@
 address     = "localhost"
-port        = 8000
+tcpport     = 8000
+udpport     = 8001
+restport    = 8002
 alpha       = 3
 replication = 20

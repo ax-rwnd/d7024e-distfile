@@ -1,4 +1,4 @@
-package main
+package rest
 
 import (
     "net/http"
@@ -15,10 +15,9 @@ HTTP standard status codes
 
 */
 
-
 func sendResponse(w http.ResponseWriter, statusCode int, message string) {
 
-	w.WriteHeader(statusCode)
+    w.WriteHeader(statusCode)
     w.Write([]byte(message))
 
 }

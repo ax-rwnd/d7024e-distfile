@@ -31,8 +31,8 @@ type Network struct {
     listenChannel chan NetworkMessage
     // Kademlia routing table
     Routing *RoutingTable
-    // <Key, Value> store
-    store *KVStore
+    // <Key, Value> Store
+    Store *KVStore
 }
 
 func (msg *NetworkMessage) String() string {
@@ -55,8 +55,8 @@ func NewNetwork(ip string, tcpPort int, udpPort int) *Network {
     network := new(Network)
     // Random ID on network start
     network.Routing = NewRoutingTable(NewContact(NewKademliaIDRandom(), ip, tcpPort, udpPort))
-    // Key value store
-    network.store = NewKVStore()
+    // Key value Store
+    network.Store = NewKVStore()
     // Start listening to UDP socket
     listening := make(chan bool)
     go network.Listen(&listening)
@@ -91,7 +91,7 @@ func (network *Network) receiveFindContactMessage(connection net.PacketConn, rem
     go network.SendMessageToUdpConnection(&msg, remote_addr, connection)
 }
 
-// Someone wants us to store a kademlia ID (file hash) along with their contact information in our <key,value> store
+// Someone wants us to Store a kademlia ID (file hash) along with their contact information in our <key,value> Store
 func (network *Network) receiveStoreDataMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Store a non-marshalled kademlia id as key (file hash), and marshalled contacts as value (file owners)
     var key KademliaID
@@ -102,7 +102,7 @@ func (network *Network) receiveStoreDataMessage(connection net.PacketConn, remot
     }
     var owners []Contact
     // Check if we have it
-    if value, err := network.store.Lookup(key); err == nil {
+    if value, err := network.Store.Lookup(key); err == nil {
         if err := msgpack.Unmarshal(value, &owners); err != nil {
             // The content of this <key,value> is not a contact list, but a file. Do nothing.
             return
@@ -117,11 +117,11 @@ func (network *Network) receiveStoreDataMessage(connection net.PacketConn, remot
         log.Printf("%v failed to marshal value from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
         return
     }
-    network.store.Insert(key, false, marshaledOwners)
+    network.Store.Insert(key, false, marshaledOwners)
     fmt.Printf("%v stored hash key %v from %v\n", network.Routing.Me.Address, key.String(), message.Origin.String())
 }
 
-// Someone wants to query our <key,value> store for a file hash and know which contacts it can be downloaded from
+// Someone wants to query our <key,value> Store for a file hash and know which contacts it can be downloaded from
 func (network *Network) receiveFindDataMessage(connection net.PacketConn, remote_addr net.Addr, message *NetworkMessage) {
     // Read the file hash (kvStore key) requested
     var hash KademliaID
@@ -131,9 +131,9 @@ func (network *Network) receiveFindDataMessage(connection net.PacketConn, remote
         return
     }
     // Check if we have it
-    value, err := network.store.Lookup(hash)
+    value, err := network.Store.Lookup(hash)
     if err != nil {
-        // Key not in store, reply with empty message
+        // Key not in Store, reply with empty message
         fmt.Printf("%v cannot find <key,value> for key=%v\n", network.Routing.Me.Address, hash.String())
         msg := NetworkMessage{MsgType: rpc.FIND_DATA_MSG, Origin: network.Routing.Me, RpcID: message.RpcID}
         go network.SendMessageToUdpConnection(&msg, remote_addr, connection)
@@ -160,7 +160,7 @@ func (network *Network) receiveTransferDataMessage(connection net.Conn, message 
         log.Printf("%v invalid hash from %v: %v\n", network.Routing.Me.Address, connection.RemoteAddr().String(), err)
         return
     }
-    data, err := network.store.Lookup(hash)
+    data, err := network.Store.Lookup(hash)
     if err != nil {
         log.Printf("%v cannot find data for %v: %v\n", network.Routing.Me.Address, connection.RemoteAddr().String(), hash.String())
         return
@@ -406,7 +406,7 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
 
 // Send a Find Node message over UDP. Blocks until response or timeout.
 func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver *Contact) ([]Contact) {
-    // Marshal the contact and store it in Data byte array later
+    // Marshal the contact and Store it in Data byte array later
     findTargetMsg, err := msgpack.Marshal(*findTarget)
     if err != nil {
         log.Printf("%v could not marshal contact: %v\n", network.Routing.Me, err)
@@ -438,7 +438,7 @@ func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver 
 
 // Search for owners of a particular file, using its hash
 func (network *Network) SendFindDataMessage(hash *KademliaID, receiver *Contact) []Contact {
-    // Marshal the contact and store it in Data byte array later
+    // Marshal the contact and Store it in Data byte array later
     hashMsg, err := msgpack.Marshal(*hash)
     if err != nil {
         log.Printf("%v could not marshal kademlia id: %v\n", network.Routing.Me, err)
@@ -466,7 +466,7 @@ func (network *Network) SendFindDataMessage(hash *KademliaID, receiver *Contact)
     return []Contact{}
 }
 
-// Tell another node to store <hash,me> as <key,value>
+// Tell another node to Store <hash,me> as <key,value>
 func (network *Network) SendStoreMessage(hash *KademliaID, receiver *Contact) {
     hashMsg, err := msgpack.Marshal(hash)
     if err != nil {

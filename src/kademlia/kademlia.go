@@ -87,7 +87,7 @@ func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
             if len(contactsToVisit) > 0 {
                 callChannel := make(chan []Contact)
                 lookupChannels = append(lookupChannels, callChannel)
-                // Make new recursive lookup calls and store the channels
+                // Make new recursive lookup calls and Store the channels
                 go func(input []Contact, callChannel chan []Contact) int {
                     set := []reflect.SelectCase{}
                     set = append(set, reflect.SelectCase{
@@ -177,10 +177,10 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
     return &owners
 }
 
-// Store the data locally, then have other nodes store the contact of ones holding the data
+// Store the data locally, then have other nodes Store the contact of ones holding the data
 func (kademlia *Kademlia) Store(data []byte) KademliaID {
     hash := NewKademliaIDFromBytes(data)
-    kademlia.Net.store.Insert(*hash, false, data)
+    kademlia.Net.Store.Insert(*hash, false, data)
     contacts := kademlia.LookupContact(hash)
     for _, contact := range contacts {
         go kademlia.Net.SendStoreMessage(hash, &contact)

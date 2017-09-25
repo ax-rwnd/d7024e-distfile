@@ -127,20 +127,20 @@ func TestUDPConnectionFail(t *testing.T) {
     }
 }
 
-// Send store message from one node to another, check if it was received and stored
+// Send Store message from one node to another, check if it was received and stored
 func TestSendStoreMessage(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2.listenChannel = make(chan NetworkMessage)
     hash := NewRandomKademliaID()
-    // Send store message
+    // Send Store message
     node1.SendStoreMessage(hash, &node2.Routing.Me)
     var err error
     var data []byte
     // Wait until node2 has stored the hash
     <-node2.listenChannel
     node2.listenChannel = nil
-    data, err = node2.store.Lookup(*hash)
+    data, err = node2.Store.Lookup(*hash)
     // Unmarshal and check if value is ok (file owner contact)
     var value []Contact
     err = msgpack.Unmarshal(data, &value)
@@ -158,20 +158,20 @@ func TestSendFindDataMessage(t *testing.T) {
     if err != nil {
         t.Fail()
     }
-    node2.store.Insert(*hash, false, marshaledContact)
+    node2.Store.Insert(*hash, false, marshaledContact)
     contacts := node1.SendFindDataMessage(hash, &node2.Routing.Me)
     if contacts == nil || len(contacts) == 0 || !contacts[0].Equals(&node1.Routing.Me) {
         t.Fail()
     }
 }
 
-// Send store message from one node to another, find if it was received and stored
+// Send Store message from one node to another, find if it was received and stored
 func TestSendStoreFindMessages(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     node2.listenChannel = make(chan NetworkMessage)
     hash := NewRandomKademliaID()
-    // Send store message
+    // Send Store message
     node1.SendStoreMessage(hash, &node2.Routing.Me)
     // Wait until node2 has stored the hash
     <-node2.listenChannel
@@ -181,7 +181,7 @@ func TestSendStoreFindMessages(t *testing.T) {
     if contacts == nil || len(contacts) == 0 || !contacts[0].Equals(&node1.Routing.Me) {
         t.Fail()
     }
-    delete(node2.store.mapping, *hash)
+    delete(node2.Store.mapping, *hash)
     // Check that node2 no longer finds the data
     contacts = node1.SendFindDataMessage(hash, &node2.Routing.Me)
     if len(contacts) != 0 {
@@ -196,7 +196,7 @@ func TestTcpTransfer(t *testing.T) {
     data, _ := ioutil.ReadFile("test.bin")
     hash := NewKademliaIDFromBytes(data)
     // Store data in node 2, then transfer it to node 1
-    node2.store.Insert(*hash, false, data)
+    node2.Store.Insert(*hash, false, data)
     // Send TCP download request
     downloadedData := node1.SendDownloadMessage(hash, &node2.Routing.Me)
     // Check if download worked

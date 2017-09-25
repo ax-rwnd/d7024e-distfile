@@ -6,7 +6,7 @@ import (
     "github.com/BurntSushi/toml"
 )
 
-const config_file = "kademliad.toml"
+const config_file = "src/server/kademliad.toml"
 
 var stdlog, errlog *log.Logger
 
@@ -18,7 +18,9 @@ func init() {
 
 type daemonConfig struct {
     Address     string
-    Port        int
+    TcpPort     int
+    UdpPort     int
+    RestPort    int
     Alpha       int
     Replication int
 }
