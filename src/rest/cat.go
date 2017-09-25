@@ -18,5 +18,23 @@ func catHandler(k *kademlia.Kademlia, w http.ResponseWriter, r *http.Request) {
 
     fmt.Println(hash)
 
-    sendResponse(w, http.StatusOK, "200 - OK ")
+    hashID := kademlia.NewKademliaID(hash)
+    var data []byte
+
+    contactsWithData := *k.LookupData(hashID)
+    if len(contactsWithData) > 0 {
+        if contactsWithData[0].ID.Equals(k.Net.Routing.Me.ID) {
+            // We have the file locally
+            data, _ = k.Net.Store.Lookup(*hashID)
+        } else {
+            // Someone else has the file
+            for _, contact := range contactsWithData {
+                data := k.Download(hashID, &contact)
+                if len(data) > 0 {
+                    break;
+                }
+            }
+        }
+    }
+    sendResponse(w, http.StatusOK, string(data))
 }

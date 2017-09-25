@@ -130,6 +130,11 @@ func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
 
 // Find the owner of a file with specific hash.
 func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
+    // Check if we have the data locally
+    _, err := kademlia.Net.Store.Lookup(*hash)
+    if err != NotFoundError {
+        return &[]Contact{kademlia.Net.Routing.Me}
+    }
     // First find the contacts of the nodes with closest ID to hash
     closestContacts := kademlia.LookupContact(hash)
     rpcChannels := []chan []Contact{}
