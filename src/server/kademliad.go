@@ -23,6 +23,8 @@ type daemonConfig struct {
     RestPort    int
     Alpha       int
     Replication int
+	BootAddr	string
+	BootPort	int
 }
 
 func main() {
