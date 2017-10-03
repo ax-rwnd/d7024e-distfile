@@ -6,7 +6,7 @@ import (
     "github.com/BurntSushi/toml"
 )
 
-const config_file = "src/server/kademliad.toml"
+const config_file = "kademliad.toml"
 
 var stdlog, errlog *log.Logger
 

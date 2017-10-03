@@ -93,7 +93,7 @@ func TestLookupStoreData(t *testing.T) {
     hash := NewKademliaIDFromBytes(data)
     candidates := *reader.LookupData(hash)
     fmt.Printf("Found owners %v\n", candidates)
-    downloadedData := reader.Net.SendDownloadMessage(hash, &candidates[0])
+    downloadedData := reader.Download(hash, &candidates[0])
 
     // Check that we actually got the right contact
     if len(candidates) != 1 || !candidates[0].ID.Equals(owner.Net.Routing.Me.ID) {
@@ -156,4 +156,3 @@ func TestLookupStoreDataMultiple(t *testing.T) {
     }
     fmt.Printf("Downloaded from %v and %v: %v\n", candidates[0].String(), candidates[1].String(), string(downloadedData1))
 }
-
