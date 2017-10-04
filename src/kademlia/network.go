@@ -437,12 +437,12 @@ func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver 
 }
 
 // Added this function so can retrieve node ID for the boot node when bootstraping
-func (network *Network) FindContactAndID(findTarget *KademliaID, receiver *Contact) ([]Contact, Contact) {
+func (network *Network) FindContactAndID(findTarget *KademliaID, receiver *Contact) ([]Contact, KademliaID) {
 	// Marshal the contact and Store it in Data byte array later
     findTargetMsg, err := msgpack.Marshal(*findTarget)
     if err != nil {
         log.Printf("%v could not marshal contact: %v\n", network.Routing.Me, err)
-        return []Contact{} Contact{}
+        return []Contact{}, KademliaID{}
     }
     // Unique id for this RPC
     rpcID := *NewKademliaIDRandom()
@@ -461,11 +461,11 @@ func (network *Network) FindContactAndID(findTarget *KademliaID, receiver *Conta
         if err != nil {
             log.Printf("%v could not unmarshal contact array: %v\n", network.Routing.Me, err)
         }
-        return newContacts response.Origin.ID
+        return newContacts, *response.Origin.ID
     } else if response != nil {
         log.Printf("%v received unknown message %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
     }
-    return []Contact{} Contact{}
+    return []Contact{}, KademliaID{}
 }
 
 // Search for owners of a particular file, using its hash
