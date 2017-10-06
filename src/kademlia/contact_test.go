@@ -1,14 +1,14 @@
 package kademlia
 
 import (
-    "fmt"
+    "log"
     "testing"
 )
 
 func TestNewContactAndEqual(t *testing.T) {
     contact := NewContact(NewKademliaID("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"), "test", 0, 0)
     if !contact.ID.Equals(NewKademliaID("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")) {
-        fmt.Println("Wrong ID!")
+        log.Println("Wrong ID!")
         t.Fail()
     }
 }
@@ -38,5 +38,64 @@ func TestAppendAndGetCandidates(t *testing.T) {
         if found == false {
             t.Fail()
         }
+    }
+}
+
+func TestContactLess(t *testing.T) {
+    defer func() {
+        if r := recover(); r != nil {
+            log.Println("Recovering from panic:",r)
+            t.Fail()
+        }
+    }()
+
+    origin := NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "test", 0, 0)
+    a := NewContact(NewKademliaID("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF"), "test", 0, 0)
+    b := NewContact(NewKademliaID("FFFFFFFFFFFFFFFFFF0000000000000000000000"), "test", 0, 0)
+    a.CalcDistance(origin.ID)
+    b.CalcDistance(origin.ID)
+
+    if a.Less(&b) {
+        log.Println("a should not be less than b")
+        t.Fail()
+    }
+
+    origin.CalcDistance(origin.ID)
+    if origin.Less(&origin) {
+        log.Println("less returns less on equal")
+        t.Fail()
+    }
+}
+
+func TestContactCalcDistance(t *testing.T) {
+    origin := NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "test", 0, 0)
+    c := NewContact(NewKademliaID("1010101010101010101010101010101010101010"), "test", 0, 0)
+
+    c.CalcDistance(origin.ID)
+    if !c.distance.Equals(c.ID) {
+        log.Println("Distance does not represent distance from origo.")
+        t.Fail()
+    }
+
+    origin.CalcDistance(origin.ID)
+    if !origin.distance.Equals(origin.ID) {
+        log.Println("Origin is not the zero-vector",origin.distance,origin.ID)
+        t.Fail()
+    }
+}
+
+func TestContactCandiatesAppend(t *testing.T) {
+    a := NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "test", 0, 0)
+    b := NewContact(NewKademliaID("1111111111111111111111111111111111111111"), "test", 0, 0)
+
+    lsta := ContactCandidates{[]Contact{a,a,a,a}}
+    lstb := ContactCandidates{[]Contact{b,b,b,b}}
+    lsta.Append(lstb.contacts)
+
+    lstr := ContactCandidates{[]Contact{a,a,a,a,b,b,b,b}}
+
+    if lsta.Len() != lstr.Len() {
+        log.Println("Wrong length of list")
+        t.Fail()
     }
 }

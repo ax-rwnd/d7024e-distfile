@@ -26,7 +26,13 @@ func (contact *Contact) CalcDistance(target *KademliaID) {
 }
 
 func (contact *Contact) Less(otherContact *Contact) bool {
-    return contact.distance.Less(otherContact.distance)
+    if contact.distance == nil {
+        panic("call CalcDistance on contact before Less")
+    } else if otherContact == nil {
+        panic("call CalcDistance on otherContact before Less")
+    } else {
+        return contact.distance.Less(otherContact.distance)
+    }
 }
 
 func (contact *Contact) String() string {
