@@ -1,7 +1,7 @@
 package kademlia
 
 import(
-	"fmt"
+	"log"
 	"errors"
 	"math/rand"
 )
@@ -14,6 +14,10 @@ func (kad *Kademlia) Bootstrap(bootAddr string, tcpPort int, bootPort int) {
 
 	// k should be a list of contacts returning, targetID to boot
 	k, bootID := netw.FindContactAndID(netw.Routing.Me.ID, &boot)
+	if netw.Routing.Me.ID.Equals(&bootID) {
+        log.Println("No bootstrap required.")
+		return
+	}
 
 	for _, contact := range k {
 		netw.Routing.AddContact(contact, nil)
@@ -25,12 +29,6 @@ func (kad *Kademlia) Bootstrap(bootAddr string, tcpPort int, bootPort int) {
 	if !b {
 		errors.New("contact couldn't be added")
 	}
-
-	defer func() {
-		if r := recover(); r!=nil {
-			fmt.Println("Recovering...")
-		}
-	}()
 
 	// all index from 0 to the bootIndex is further away from the nóde than the boot node
 	bootIndex := netw.Routing.getBucketIndex(boot.ID)
@@ -49,7 +47,7 @@ func (kad *Kademlia) Bootstrap(bootAddr string, tcpPort int, bootPort int) {
                 n++
             }
         } else {
-            fmt.Println("No buckets to ping.")
+           log.Println("No buckets to ping.")
         }
     }
 }
