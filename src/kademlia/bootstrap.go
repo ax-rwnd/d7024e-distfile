@@ -6,10 +6,11 @@ import(
 	"math/rand"
 )
 
-func Bootstrap(bootPort int, bootAddr string, tcpPort int, udpPort int, netw *Network) {
+func (kad *Kademlia) Bootstrap(bootAddr string, tcpPort int, bootPort int) {
+    netw := kad.Net
 
 	tmpID := NewKademliaID("0000000000000000000000000000000000000000") // dummy ID
-	boot := NewContact(tmpID, bootAddr, tcpPort, udpPort)
+	boot := NewContact(tmpID, bootAddr, tcpPort, bootPort)
 
 	// k should be a list of contacts returning, targetID to boot
 	k, bootID := netw.FindContactAndID(netw.Routing.Me.ID, &boot)
@@ -18,7 +19,7 @@ func Bootstrap(bootPort int, bootAddr string, tcpPort int, udpPort int, netw *Ne
 		netw.Routing.AddContact(contact, nil)
 	}
 
-	boot = NewContact(&bootID, bootAddr, tcpPort, udpPort)
+	boot = NewContact(&bootID, bootAddr, tcpPort, bootPort)
 	b, _ := netw.Routing.AddContact(boot, netw.SendPingMessage)
 
 	if !b {

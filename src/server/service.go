@@ -52,7 +52,7 @@ func (service *Service) Manage(config *daemonConfig) (string, error) { // Start 
     }
 
     k := kademlia.NewKademlia(config.Address, config.TcpPort, config.UdpPort)
-    kademlia.Bootstrap(config.BootPort, config.BootAddr, config.TcpPort, config.UdpPort, k.Net)
+    k.Bootstrap(config.BootAddr, config.TcpPort, config.BootPort)
 
     go rest.Initialize(k, config.RestPort)
     interrupt := make(chan os.Signal, 1)

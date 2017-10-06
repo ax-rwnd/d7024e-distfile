@@ -1,6 +1,7 @@
 package kademlia
 
 import (
+    "errors"
     "net"
     "time"
     "fmt"
@@ -301,6 +302,11 @@ func (network *Network) SendMessageToUdpConnection(message *NetworkMessage, addr
 
 // Send a one-way message
 func (network *Network) SendMessage(protocol int, message *NetworkMessage, contact *Contact) (net.Conn, error) {
+    if network.Routing.Me.Address.IP == contact.Address.IP &&
+        network.Routing.Me.Address.UdpPort == contact.Address.UdpPort {
+        log.Println("Sending to myself, aborting!")
+        return nil, errors.New("sending to myself")
+    }
     var port int
     var protoStr string
     if protocol == UDP {
@@ -516,7 +522,7 @@ func (network *Network) SendDownloadMessage(hash *KademliaID, receiver *Contact)
     }
     message := NetworkMessage{MsgType: rpc.TRANSFER_DATA_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
     response := network.SendReceiveMessage(TCP, &message, receiver)
-    fmt.Printf("%v downloaded from %v: %v\n", network.Routing.Me.Address, response.Origin.Address, response.String())
+    fmt.Printf("%s downloaded from %v: %v\n", network.Routing.Me.Address, response.Origin.Address, response.String())
     if response != nil && response.MsgType == rpc.TRANSFER_DATA_MSG && response.RpcID.Equals(&message.RpcID) {
         return response.Data
     }
