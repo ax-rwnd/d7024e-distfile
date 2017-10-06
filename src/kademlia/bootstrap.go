@@ -14,7 +14,7 @@ func (kad *Kademlia) Bootstrap(bootAddr string, tcpPort int, bootPort int) {
 
 	// k should be a list of contacts returning, targetID to boot
 	k, bootID := netw.FindContactAndID(netw.Routing.Me.ID, &boot)
-    /* TODO: bootstrapping works fine without this, investigate?
+    /* TODO: bootstrapping works fine without this?
 	if netw.Routing.Me.ID.Equals(&bootID) {
         log.Println("No bootstrap required.")
 		return
