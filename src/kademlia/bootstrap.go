@@ -13,14 +13,16 @@ func Bootstrap(bootPort int, bootAddr string, tcpPort int, udpPort int, netw *Ne
 
 	// k should be a list of contacts returning, targetID to boot
 	k, bootID := netw.FindContactAndID(netw.Routing.Me.ID, &boot)
+	if newt.Routing.Me.ID == bootID {
+		goto End
+	}
 
 	for _, contact := range k {
-		if netw.Routing.Me.ID != bootID {
-			netw.Routing.AddContact(contact, nil)
-		}		
+		netw.Routing.AddContact(contact, nil)		
 	}
 
 	boot = NewContact(&bootID, bootAddr, tcpPort, udpPort)
+	
 	b, _ := netw.Routing.AddContact(boot, netw.SendPingMessage)
 
 	if !b {
@@ -53,4 +55,5 @@ func Bootstrap(bootPort int, bootAddr string, tcpPort int, udpPort int, netw *Ne
             fmt.Println("No buckets to ping.")
         }
     }
+	End:
 }
