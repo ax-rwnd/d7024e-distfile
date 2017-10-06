@@ -208,7 +208,7 @@ func (network *Network) receiveUDP(connection net.PacketConn) {
     buf := make([]byte, RECEIVE_BUFFER_SIZE)
     _, remoteAddress, err := connection.ReadFrom(buf)
     if err != nil {
-        log.Printf("%v UDP read failed from %v: %v\n", network.Routing.Me.Address, remoteAddress, err)
+        fmt.Printf("%v UDP read failed from %v: %v\n", network.Routing.Me.Address, remoteAddress, err)
         return
     }
     var message NetworkMessage
@@ -260,7 +260,7 @@ func (network *Network) Listen() {
         for {
             connection, err := tcpListen.Accept()
             if err != nil {
-                log.Printf("%v TCP read failed: %v\n", network.Routing.Me.Address, err)
+                fmt.Printf("%v TCP read failed: %v\n", network.Routing.Me.Address, err)
                 return
             }
             channel <- true
