@@ -1,6 +1,7 @@
 package kademlia
 
 import (
+    "errors"
     "net"
     "time"
     "fmt"
@@ -301,6 +302,11 @@ func (network *Network) SendMessageToUdpConnection(message *NetworkMessage, addr
 
 // Send a one-way message
 func (network *Network) SendMessage(protocol int, message *NetworkMessage, contact *Contact) (net.Conn, error) {
+    if network.Routing.Me.Address.IP == contact.Address.IP &&
+        network.Routing.Me.Address.UdpPort == contact.Address.UdpPort {
+        log.Println("Sending to myself, aborting!")
+        return nil, errors.New("sending to myself")
+    }
     var port int
     var protoStr string
     if protocol == UDP {
@@ -436,6 +442,38 @@ func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver 
     return []Contact{}
 }
 
+// Added this function so can retrieve node ID for the boot node when bootstraping
+func (network *Network) FindContactAndID(findTarget *KademliaID, receiver *Contact) ([]Contact, KademliaID) {
+	// Marshal the contact and Store it in Data byte array later
+    findTargetMsg, err := msgpack.Marshal(*findTarget)
+    if err != nil {
+        log.Printf("%v could not marshal contact: %v\n", network.Routing.Me, err)
+        return []Contact{}, KademliaID{}
+    }
+    // Unique id for this RPC
+    rpcID := *NewKademliaIDRandom()
+    msg := NetworkMessage{MsgType: rpc.FIND_CONTACT_MSG, Origin: network.Routing.Me, RpcID: rpcID, Data: findTargetMsg}
+    // Blocks until response
+    response := network.SendReceiveMessage(UDP, &msg, receiver)
+    // Validate the response
+    if response != nil && response.MsgType == rpc.FIND_CONTACT_MSG {
+        if !response.RpcID.Equals(&rpcID) {
+            log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.Routing.Me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
+        }
+        fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
+        // Unmarshal the contacts we got back
+        var newContacts []Contact
+        err := msgpack.Unmarshal(response.Data, &newContacts)
+        if err != nil {
+            log.Printf("%v could not unmarshal contact array: %v\n", network.Routing.Me, err)
+        }
+        return newContacts, *response.Origin.ID
+    } else if response != nil {
+        log.Printf("%v received unknown message %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
+    }
+    return []Contact{}, KademliaID{}
+}
+
 // Search for owners of a particular file, using its hash
 func (network *Network) SendFindDataMessage(hash *KademliaID, receiver *Contact) []Contact {
     // Marshal the contact and Store it in Data byte array later
@@ -484,7 +522,7 @@ func (network *Network) SendDownloadMessage(hash *KademliaID, receiver *Contact)
     }
     message := NetworkMessage{MsgType: rpc.TRANSFER_DATA_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
     response := network.SendReceiveMessage(TCP, &message, receiver)
-    fmt.Printf("%v downloaded from %v: %v\n", network.Routing.Me.Address, response.Origin.Address, response.String())
+    fmt.Printf("%s downloaded from %v: %v\n", network.Routing.Me.Address, response.Origin.Address, response.String())
     if response != nil && response.MsgType == rpc.TRANSFER_DATA_MSG && response.RpcID.Equals(&message.RpcID) {
         return response.Data
     }

@@ -4,3 +4,8 @@ udpport     = 8001
 restport    = 8002
 alpha       = 3
 replication = 20
+
+# Bootstrap node, base case, uses own address and port, boots to itself
+# Otherwise, use a node already in the network
+bootAddr    = "localhost" 
+bootPort    = 8001

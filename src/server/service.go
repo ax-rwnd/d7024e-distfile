@@ -52,8 +52,9 @@ func (service *Service) Manage(config *daemonConfig) (string, error) { // Start 
     }
 
     k := kademlia.NewKademlia(config.Address, config.TcpPort, config.UdpPort)
-    go rest.Initialize(k, config.RestPort)
+    k.Bootstrap(config.BootAddr, config.TcpPort, config.BootPort)
 
+    go rest.Initialize(k, config.RestPort)
     interrupt := make(chan os.Signal, 1)
     signal.Notify(interrupt, os.Interrupt, os.Kill, syscall.SIGTERM)
 
