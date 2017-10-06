@@ -286,7 +286,7 @@ func (network *Network) Listen() {
     network.listening <- true
     // Infinite loop listening to TCP and UDP sockets
     stop := false
-    for  {
+    for {
         select {
         case <-tcpChannel:
             // TCP message received
@@ -406,7 +406,8 @@ func (network *Network) SendReceiveMessage(protocol int, message *NetworkMessage
     }
 }
 
-// Ping another node with a UDP packet
+// Ping another node with a UDP packet. If ping succeeds, caller is responsible for adding it to the routing table
+// since it is not done automatically.
 func (network *Network) SendPingMessage(contact *Contact) bool {
     if contact.Address == network.Routing.Me.Address {
         // Node pinged itself
@@ -419,47 +420,17 @@ func (network *Network) SendPingMessage(contact *Contact) bool {
     }
     fmt.Printf("%v received from %v: %v\n", network.Routing.Me.Address, contact.Address, response.String())
     if response.MsgType == rpc.PONG_MSG && response.RpcID.Equals(&msg.RpcID) {
-        // Node responded to ping, so add it to routing table
-        //network.Routing.AddContact(response.Origin)
+        // Node responded to ping, so add it to routing table?
+        // Would make sense, but interferes with bucket-full-pinging, so ignore it for now...
+        // network.Routing.AddContact(response.Origin, nil)
         return true
     }
     return false
 }
 
 // Send a Find Node message over UDP. Blocks until response or timeout.
-func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver *Contact) ([]Contact) {
-    // Marshal the contact and Store it in Data byte array later
-    findTargetMsg, err := msgpack.Marshal(*findTarget)
-    if err != nil {
-        log.Printf("%v could not marshal contact: %v\n", network.Routing.Me, err)
-        return []Contact{}
-    }
-    // Unique id for this RPC
-    rpcID := *NewKademliaIDRandom()
-    msg := NetworkMessage{MsgType: rpc.FIND_CONTACT_MSG, Origin: network.Routing.Me, RpcID: rpcID, Data: findTargetMsg}
-    // Blocks until response
-    response := network.SendReceiveMessage(UDP, &msg, receiver)
-    // Validate the response
-    if response != nil && response.MsgType == rpc.FIND_CONTACT_MSG {
-        if !response.RpcID.Equals(&rpcID) {
-            log.Printf("%v wrong RPC ID from %v: %v should be %v\n", network.Routing.Me.Address, response.Origin.Address, response.RpcID.String(), rpcID)
-        }
-        fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
-        // Unmarshal the contacts we got back
-        var newContacts []Contact
-        err := msgpack.Unmarshal(response.Data, &newContacts)
-        if err != nil {
-            log.Printf("%v could not unmarshal contact array: %v\n", network.Routing.Me, err)
-        }
-        return newContacts
-    } else if response != nil {
-        log.Printf("%v received unknown message %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
-    }
-    return []Contact{}
-}
-
-// Added this function so can retrieve node ID for the boot node when bootstraping
-func (network *Network) FindContactAndID(findTarget *KademliaID, receiver *Contact) ([]Contact, KademliaID) {
+// Returns closest known contacts to target ID. For bootstrapping purposes, also the ID of the receiver.
+func (network *Network) SendFindContactAndIdMessage(findTarget *KademliaID, receiver *Contact) ([]Contact, KademliaID) {
     // Marshal the contact and Store it in Data byte array later
     findTargetMsg, err := msgpack.Marshal(*findTarget)
     if err != nil {
@@ -488,6 +459,12 @@ func (network *Network) FindContactAndID(findTarget *KademliaID, receiver *Conta
         log.Printf("%v received unknown message %v: %v \n", network.Routing.Me.Address, response.Origin.Address, response.String())
     }
     return []Contact{}, KademliaID{}
+}
+
+// Send a Find Node message over UDP. Blocks until response or timeout.
+func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver *Contact) ([]Contact) {
+    contacts, _ := network.SendFindContactAndIdMessage(findTarget,receiver);
+    return contacts
 }
 
 // Search for owners of a particular file, using its hash

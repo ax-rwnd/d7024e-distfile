@@ -13,7 +13,7 @@ func (kad *Kademlia) Bootstrap(bootAddr string, tcpPort int, bootPort int) {
 	boot := NewContact(tmpID, bootAddr, tcpPort, bootPort)
 
 	// k should be a list of contacts returning, targetID to boot
-	k, bootID := netw.FindContactAndID(netw.Routing.Me.ID, &boot)
+	k, bootID := netw.SendFindContactAndIdMessage(netw.Routing.Me.ID, &boot)
 	if netw.Routing.Me.ID.Equals(&bootID) {
         log.Println("No bootstrap required.")
 		return
