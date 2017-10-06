@@ -15,7 +15,9 @@ func Bootstrap(bootPort int, bootAddr string, tcpPort int, udpPort int, netw *Ne
 	k, bootID := netw.FindContactAndID(netw.Routing.Me.ID, &boot)
 
 	for _, contact := range k {
-		netw.Routing.AddContact(contact, nil)
+		if netw.Routing.Me.ID != bootID {
+			netw.Routing.AddContact(contact, nil)
+		}		
 	}
 
 	boot = NewContact(&bootID, bootAddr, tcpPort, udpPort)
