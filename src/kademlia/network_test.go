@@ -59,6 +59,9 @@ func TestUDPing(t *testing.T) {
             t.Fail()
         }
     }
+    node1.Close()
+    node2.Close()
+    node3.Close()
 }
 
 // Test sending a ping message between two nodes generates the correct response
@@ -71,6 +74,8 @@ func TestSendReceiveMessage(t *testing.T) {
     if response.MsgType != rpc.PONG_MSG || !response.RpcID.Equals(&msg.RpcID) || !response.Origin.ID.Equals(node2.Routing.Me.ID) {
         t.Fail()
     }
+    node1.Close()
+    node2.Close()
 }
 
 // This UDP message should not generate a response from the other node, it should time out waiting for it.
@@ -84,6 +89,8 @@ func TestSendReceiveMessageTimeoutUDP(t *testing.T) {
         fmt.Printf("%v\n", response.String())
         t.Fail()
     }
+    node1.Close()
+    node2.Close()
 }
 
 // This TCP message should not generate a response from the other node, it should time out waiting for it.
@@ -97,6 +104,8 @@ func TestSendReceiveMessageTimeoutTCP(t *testing.T) {
         fmt.Printf("%v\n", response.String())
         t.Fail()
     }
+    node1.Close()
+    node2.Close()
 }
 
 // Test that the correct response is given when finding contacts on other nodes
@@ -113,6 +122,8 @@ func TestSendFindContactMessage(t *testing.T) {
     if contacts == nil || !contacts[0].Equals(contact0) || !contacts[1].Equals(contact1) || !contacts[2].Equals(contact2) {
         t.Fail()
     }
+    node1.Close()
+    node2.Close()
 }
 
 // Test that UDP based SendReceiveMessage fails correctly on connection failure
@@ -125,6 +136,7 @@ func TestUDPConnectionFail(t *testing.T) {
     if response != nil {
         t.Fail()
     }
+    node1.Close()
 }
 
 // Send Store message from one node to another, check if it was received and stored
@@ -147,6 +159,8 @@ func TestSendStoreMessage(t *testing.T) {
     if err != nil || !value[0].Equals(&node1.Routing.Me) {
         t.Fail()
     }
+    node1.Close()
+    node2.Close()
 }
 
 // Put a file hash and file owner into kvStore of node2. See if node1 finds it.
@@ -163,6 +177,8 @@ func TestSendFindDataMessage(t *testing.T) {
     if contacts == nil || len(contacts) == 0 || !contacts[0].Equals(&node1.Routing.Me) {
         t.Fail()
     }
+    node1.Close()
+    node2.Close()
 }
 
 // Send Store message from one node to another, find if it was received and stored
@@ -187,6 +203,8 @@ func TestSendStoreFindMessages(t *testing.T) {
     if len(contacts) != 0 {
         t.Fail()
     }
+    node1.Close()
+    node2.Close()
 }
 
 // Download data by TCP from one node to another
@@ -208,6 +226,8 @@ func TestTcpTransfer(t *testing.T) {
             t.Fail()
         }
     }
+    node1.Close()
+    node2.Close()
 }
 
 // If routing table bucket is full, ping the last contact, if it does not respond, add the contact.
@@ -230,11 +250,14 @@ func TestNetworkAddContactSuccess(t *testing.T) {
             t.Fail()
         }
     }
+    node1.Close()
 }
 
 // If routing table bucket is full, ping the last contact, if it does respond, do not add the contact.
 func TestNetworkAddContactFail(t *testing.T) {
+    var networks []*Network
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+    networks = append(networks, node1);
     //node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     id, _ := hex.DecodeString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
     var i byte
@@ -245,6 +268,7 @@ func TestNetworkAddContactFail(t *testing.T) {
         newId[len(newId)-1] = id[len(id)-1] - i
         // Add contact with this ID
         nodei := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
+        networks = append(networks, nodei);
         kademliaId := NewKademliaID(hex.EncodeToString(newId))
         nodei.Routing.Me.ID = kademliaId
         contactWasAdded, _ := node1.Routing.AddContact(nodei.Routing.Me, node1.SendPingMessage)
@@ -253,5 +277,8 @@ func TestNetworkAddContactFail(t *testing.T) {
         if i == bucketSize && contactWasAdded {
             t.Fail()
         }
+    }
+    for _, network := range networks {
+        network.Close()
     }
 }
