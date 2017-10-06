@@ -4,6 +4,7 @@ import (
     "fmt"
     "reflect"
     "sync"
+    "github.com/vmihailenco/msgpack"
 )
 
 const ALPHA = 3
@@ -131,9 +132,15 @@ func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
 // Find the owner of a file with specific hash.
 func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
     // Check if we have the data locally
-    _, err := kademlia.Net.Store.Lookup(*hash)
+    value, err := kademlia.Net.Store.Lookup(*hash)
     if err != NotFoundError {
-        return &[]Contact{kademlia.Net.Routing.Me}
+        var owners []Contact
+        err = msgpack.Unmarshal(value, &owners)
+        if err == nil {
+            return &owners
+        } else {
+            return &[]Contact{kademlia.Net.Routing.Me}
+        }
     }
     // First find the contacts of the nodes with closest ID to hash
     closestContacts := kademlia.LookupContact(hash)
@@ -188,7 +195,7 @@ func (kademlia *Kademlia) Store(data []byte) KademliaID {
     kademlia.Net.Store.Insert(*hash, false, data)
     contacts := kademlia.LookupContact(hash)
     for _, contact := range contacts {
-        go kademlia.Net.SendStoreMessage(hash, &contact)
+        kademlia.Net.SendStoreMessage(hash, &contact)
     }
     return *hash
 }

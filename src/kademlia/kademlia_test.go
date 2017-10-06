@@ -52,7 +52,7 @@ func createKademliaMesh(width int, height int) []*Kademlia {
 
 // Test looking up a contact with specific kademlia ID
 func TestLookupContact(t *testing.T) {
-    kademlias := createKademliaMesh(10, 10)
+    kademlias := createKademliaMesh(10, 5)
     numNodes := len(kademlias)
     var cc = []chan []Contact{make(chan []Contact), make(chan []Contact),}
     // First node does not yet have last node as a contact. Find it.
@@ -74,6 +74,9 @@ func TestLookupContact(t *testing.T) {
     if !contacts2[0].ID.Equals(kademlias[0].Net.Routing.Me.ID) {
         t.Fail()
     }
+    for _, k := range kademlias {
+        k.Net.Close()
+    }
 }
 
 //
@@ -81,7 +84,7 @@ func TestLookupContact(t *testing.T) {
 func TestLookupStoreData(t *testing.T) {
     data, _ := ioutil.ReadFile("test.bin")
     // Create some network nodes
-    kademlias := createKademliaMesh(5, 10)
+    kademlias := createKademliaMesh(5, 5)
     owner := kademlias[0]
     reader := kademlias[len(kademlias)-1]
     // Store some data
@@ -108,6 +111,9 @@ func TestLookupStoreData(t *testing.T) {
         if data[i] != downloadedData[i] {
             t.Fail()
         }
+    }
+    for _, k := range kademlias {
+        k.Net.Close()
     }
 }
 
@@ -155,4 +161,7 @@ func TestLookupStoreDataMultiple(t *testing.T) {
         }
     }
     fmt.Printf("Downloaded from %v and %v: %v\n", candidates[0].String(), candidates[1].String(), string(downloadedData1))
+    for _, k := range kademlias {
+        k.Net.Close()
+    }
 }

@@ -30,6 +30,7 @@ type NetworkMessage struct {
 type Network struct {
     // If not nil, Listen will channel messages here after processing them
     listenChannel chan NetworkMessage
+    listening     chan bool
     // Kademlia routing table
     Routing *RoutingTable
     // <Key, Value> Store
@@ -59,9 +60,9 @@ func NewNetwork(ip string, tcpPort int, udpPort int) *Network {
     // Key value Store
     network.Store = NewKVStore()
     // Start listening to UDP socket
-    listening := make(chan bool)
-    go network.Listen(&listening)
-    <-listening
+    network.listening = make(chan bool)
+    go network.Listen()
+    <-network.listening
     return network
 }
 
@@ -205,39 +206,45 @@ func (network *Network) receiveTCP(connection net.Conn) {
 // Someone sent us a UDP packet, check if it is an RPC message and handle it in that case
 func (network *Network) receiveUDP(connection net.PacketConn) {
     buf := make([]byte, RECEIVE_BUFFER_SIZE)
-    _, remote_address, err := connection.ReadFrom(buf)
+    _, remoteAddress, err := connection.ReadFrom(buf)
     if err != nil {
-        log.Printf("%v unreadable UDP packet from %v: %v\n", network.Routing.Me.Address, remote_address, err)
+        log.Printf("%v UDP read failed from %v: %v\n", network.Routing.Me.Address, remoteAddress, err)
         return
     }
     var message NetworkMessage
     err = msgpack.Unmarshal(buf, &message)
     if err != nil {
-        log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remote_address, err)
+        log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remoteAddress, err)
         return
     }
     // Store the contact that just messaged the node
     network.Routing.AddContact(message.Origin, network.SendPingMessage)
-    fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, remote_address, message.String())
+    fmt.Printf("%v received from %v: %v \n", network.Routing.Me.Address, remoteAddress, message.String())
     switch {
     case message.MsgType == rpc.PING_MSG:
-        network.receivePingMessage(connection, remote_address, &message)
+        network.receivePingMessage(connection, remoteAddress, &message)
     case message.MsgType == rpc.FIND_CONTACT_MSG:
-        network.receiveFindContactMessage(connection, remote_address, &message)
+        network.receiveFindContactMessage(connection, remoteAddress, &message)
     case message.MsgType == rpc.STORE_DATA_MSG:
-        network.receiveStoreDataMessage(connection, remote_address, &message)
+        network.receiveStoreDataMessage(connection, remoteAddress, &message)
     case message.MsgType == rpc.FIND_DATA_MSG:
-        network.receiveFindDataMessage(connection, remote_address, &message)
+        network.receiveFindDataMessage(connection, remoteAddress, &message)
     default:
-        log.Printf("%v received unknown message from %v: %v\n", network.Routing.Me.Address, remote_address, message)
+        log.Printf("%v received unknown message from %v: %v\n", network.Routing.Me.Address, remoteAddress, message)
     }
     if network.listenChannel != nil {
         network.listenChannel <- message
     }
 }
 
+func (network *Network) Close() {
+    network.listening <- false
+    <-network.listening
+    fmt.Printf("%v stopped listening to incoming network messages\n", network.Routing.Me.Address)
+}
+
 // Listen for incoming TCP and UDP connections
-func (network *Network) Listen(listening *chan bool) {
+func (network *Network) Listen() {
     tcpAddress := network.Routing.Me.Address.IP + ":" + strconv.Itoa(network.Routing.Me.Address.TcpPort)
     udpAddress := network.Routing.Me.Address.IP + ":" + strconv.Itoa(network.Routing.Me.Address.UdpPort)
     tcpChannel := make(chan bool)
@@ -253,7 +260,8 @@ func (network *Network) Listen(listening *chan bool) {
         for {
             connection, err := tcpListen.Accept()
             if err != nil {
-                log.Fatal(err)
+                log.Printf("%v TCP read failed: %v\n", network.Routing.Me.Address, err)
+                return
             }
             channel <- true
             go network.receiveTCP(connection)
@@ -275,16 +283,24 @@ func (network *Network) Listen(listening *chan bool) {
     }(udpChannel)
 
     // Listen has been called for both UDP and TCP
-    *listening <- true
+    network.listening <- true
     // Infinite loop listening to TCP and UDP sockets
-    for {
+    stop := false
+    for  {
         select {
         case <-tcpChannel:
             // TCP message received
         case <-udpChannel:
             // UDP message received
+        case <-network.listening:
+            // Stop listening
+            stop = true
+        }
+        if stop {
+            break
         }
     }
+    network.listening <- false
 }
 
 // Send a message over an established UDP connection
@@ -444,7 +460,7 @@ func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver 
 
 // Added this function so can retrieve node ID for the boot node when bootstraping
 func (network *Network) FindContactAndID(findTarget *KademliaID, receiver *Contact) ([]Contact, KademliaID) {
-	// Marshal the contact and Store it in Data byte array later
+    // Marshal the contact and Store it in Data byte array later
     findTargetMsg, err := msgpack.Marshal(*findTarget)
     if err != nil {
         log.Printf("%v could not marshal contact: %v\n", network.Routing.Me, err)
@@ -521,8 +537,9 @@ func (network *Network) SendDownloadMessage(hash *KademliaID, receiver *Contact)
         log.Printf("%v could not marshal kademlia ID %v\n", network.Routing.Me, hash)
     }
     message := NetworkMessage{MsgType: rpc.TRANSFER_DATA_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
+    fmt.Printf("%s message from %v: %v\n", network.Routing.Me.String(), message.Origin.String(), message.String())
     response := network.SendReceiveMessage(TCP, &message, receiver)
-    fmt.Printf("%s downloaded from %v: %v\n", network.Routing.Me.Address, response.Origin.Address, response.String())
+    fmt.Printf("%s downloaded from %v: %v\n", network.Routing.Me.String(), response.Origin.String(), response.String())
     if response != nil && response.MsgType == rpc.TRANSFER_DATA_MSG && response.RpcID.Equals(&message.RpcID) {
         return response.Data
     }
