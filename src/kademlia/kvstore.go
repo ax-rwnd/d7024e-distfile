@@ -68,3 +68,27 @@ func (kvStore KVStore) Lookup(hash KademliaID) (output []byte, err error) {
     kvStore.mutex.Unlock()
     return
 }
+
+func (kvStore KVStore) Pin(hash KademliaID) (err error) {
+    kvStore.mutex.Lock()
+    if val, ok := kvStore.mapping[hash]; ok {
+        val.pinned = true
+        kvStore.mapping[hash] = val
+    } else {
+        err = NotFoundError
+    }
+    kvStore.mutex.Unlock()
+    return
+}
+
+func (kvStore KVStore) Unpin(hash KademliaID) (err error) {
+    kvStore.mutex.Lock()
+    if val, ok := kvStore.mapping[hash]; ok {
+        val.pinned = false
+        kvStore.mapping[hash] = val
+    } else {
+        err = NotFoundError
+    }
+    kvStore.mutex.Unlock()
+    return
+}
