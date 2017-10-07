@@ -34,5 +34,12 @@ func main() {
         os.Exit(1)
     }
 
+    // Grab ip from environment
+    if config.Address == "detect" {
+        stdlog.Println("Detecting address!")
+		config.Address = os.Getenv("KADIP")
+        stdlog.Println("New address", config.Address)
+    }
+
     runDaemon(&config)
 }
