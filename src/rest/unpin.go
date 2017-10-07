@@ -16,7 +16,11 @@ func unpinHandler(k *kademlia.Kademlia, w http.ResponseWriter, r *http.Request) 
     }
 
     h := kademlia.NewKademliaID(hash)
-    k.Net.Store.Unpin(*h)
-
-    sendResponse(w, http.StatusOK, fmt.Sprintf("%s was unpinned.", hash))
+    if err := k.Net.Store.Unpin(*h); err == kademlia.NotFoundError {
+        sendResponse(w, http.StatusNotFound, fmt.Sprintf("%s could not be found.", hash))
+    } else if err != nil {
+        sendResponse(w, 500, fmt.Sprintf("%s could't be unpinned: %s.", hash, err))
+    } else {
+        sendResponse(w, http.StatusOK, fmt.Sprintf("%s was unpinned.", hash))
+    }
 }

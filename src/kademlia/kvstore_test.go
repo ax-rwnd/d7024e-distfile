@@ -59,4 +59,15 @@ func TestPinUnpin(t *testing.T) {
         t.Fail()
     }
 
+    blankdata := []byte{}
+    blankid := NewKademliaIDFromBytes(blankdata)
+    if err := kvStore.Pin(*blankid); err != NotFoundError {
+        log.Println("Pinned non-existent content.")
+        t.Fail()
+    }
+    if err := kvStore.Unpin(*blankid); err != NotFoundError {
+        log.Println("Unpinned non-existent content.")
+        t.Fail()
+    }
+
 }

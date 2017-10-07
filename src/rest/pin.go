@@ -12,12 +12,16 @@ func pinHandler(k *kademlia.Kademlia, w http.ResponseWriter, r *http.Request) {
     hash := req["hash"]
 
     if r.Method != "POST" {
-        sendResponse(w, http.StatusBadRequest, "400 - Not a PUT request")
+        sendResponse(w, http.StatusBadRequest, "400 - Not a POST request")
         return
     }
 
     h := kademlia.NewKademliaID(hash)
-    k.Net.Store.Pin(*h)
-
-    sendResponse(w, http.StatusOK, fmt.Sprintf("%s was pinned.", hash))
+    if err := k.Net.Store.Pin(*h); err == kademlia.NotFoundError {
+        sendResponse(w, http.StatusNotFound, fmt.Sprintf("%s could not be found.", hash))
+    } else if err != nil {
+        sendResponse(w, 500, fmt.Sprintf("%s could't be pinned: %s.", hash, err))
+    } else {
+        sendResponse(w, http.StatusOK, fmt.Sprintf("%s was pinned.", hash))
+    }
 }
