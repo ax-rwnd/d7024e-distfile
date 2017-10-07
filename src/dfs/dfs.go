@@ -11,6 +11,7 @@ import (
     "net/http"
     "io/ioutil"
     "github.com/BurntSushi/toml"
+    "encoding/json"
 )
 
 // Standard errors
@@ -56,6 +57,9 @@ func main () {
         } else if args[0] == "unpin" {
             status := handleUnpin(&cConfig, args[1:])
             println(status)
+        } else if args[0] == "routes" {
+            contacts := handleContacts(&cConfig)
+            println(contacts)
         }
     } else {
         log.Fatal("Usage: dsf (store filename|cat hex-hash|pin hex-hash|unpin hex-hash)")
@@ -158,4 +162,24 @@ func handleUnpin(config *clientConfig, args []string) string {
     body, readErr := ioutil.ReadAll(response.Body)
     check(readErr)
     return string(body)
+}
+
+func handleContacts(config *clientConfig) string {
+    // Perform request
+    request := fmt.Sprintf("http://%s/contacts", config.Address)
+    response, requestErr := http.Get(request)
+    check(requestErr)
+    defer response.Body.Close()
+
+    // Read response
+    body, readErr := ioutil.ReadAll(response.Body)
+    check(readErr)
+
+    var contactsOut []kademlia.Contact
+    json.Unmarshal(body, &contactsOut)
+    var strOut string
+    for _, c := range(contactsOut) {
+        strOut += fmt.Sprintf("ID: %s IP: %s Ports: %d/%d\n",c.ID, c.Address.IP, c.Address.UdpPort, c.Address.TcpPort)
+    }
+    return strOut
 }

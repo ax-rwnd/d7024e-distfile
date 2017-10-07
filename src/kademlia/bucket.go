@@ -59,3 +59,15 @@ func (bucket *bucket) GetContactAndCalcDistance(target *KademliaID) []Contact {
 func (bucket *bucket) Len() int {
     return bucket.list.Len()
 }
+
+func (bucket *bucket) DumpContacts() []Contact {
+    blist := make([]Contact, bucket.Len())
+
+    i := 0
+    for e := bucket.list.Front(); e != nil; e = e.Next() {
+        blist[i] = e.Value.(Contact)
+        i++
+    }
+
+    return blist
+}

@@ -80,3 +80,20 @@ func TestLen(t *testing.T) {
     }
 
 }
+
+func TestDumpContacts(t *testing.T) {
+    b := newBucket()
+    con1 := NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "123.123.123.123", 1234, 4321)
+    con2 := NewContact(NewKademliaID("1010101010101010101010101010101010101010"), "456.456.456.456", 5678, 8765)
+
+    b.addContact(con1, nil)
+    b.addContact(con2, nil)
+
+    c_out := b.DumpContacts()
+    if c_out[0] != con1 && c_out[1] != con1  {
+        t.Fail()
+    }
+    if c_out[0] != con2 && c_out[1] != con2  {
+        t.Fail()
+    }
+}
