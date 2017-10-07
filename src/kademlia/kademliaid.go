@@ -1,10 +1,15 @@
 package kademlia
 
 import (
+    "time"
     "encoding/hex"
     "math/rand"
     "crypto/sha1"
 )
+
+func init() {
+    rand.Seed(time.Now().UTC().UnixNano())
+}
 
 const IDLength = 20
 
