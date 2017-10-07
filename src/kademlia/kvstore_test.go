@@ -14,12 +14,12 @@ func TestKVSInsertLookup(t *testing.T) {
     pinned := false
     _, err := kvStore.Insert(*id, pinned, data)
     if err != nil {
-        fmt.Println(err)
+        log.Println(err)
         t.Fail()
     }
     storedData, err := kvStore.Lookup(*id)
     if err != nil {
-        fmt.Println(err)
+        log.Println(err)
         t.Fail()
     }
     for i := range data {
@@ -36,8 +36,8 @@ func TestKVSNotFoundError(t *testing.T) {
     // Lookup without inserting first
     _, err := kvStore.Lookup(*id)
     if err != NotFoundError {
-        fmt.Println("Wrong error")
-        fmt.Println(err)
+        log.Println("Wrong error")
+        log.Println(err)
         t.Fail()
     }
 }
@@ -93,4 +93,25 @@ func TestKVSTimeToLiveNoPin(t *testing.T) {
         t.Fail()
         log.Println("ID2 was not removed")
     }
+}
+
+func TestPinUnpin(t *testing.T) {
+    kvStore := NewKVStore()
+
+    data := []byte("Test data")
+    id := NewKademliaIDFromBytes(data)
+    kvStore.Insert(*id, false, data)
+
+    kvStore.Pin(*id)
+    if val, _ := kvStore.mapping[*id]; val.pinned == false {
+        log.Println("Failed to pin content.")
+        t.Fail()
+    }
+
+    kvStore.Unpin(*id)
+    if val, _ := kvStore.mapping[*id]; val.pinned == true {
+        log.Println("Failed to unpin content.")
+        t.Fail()
+    }
+
 }

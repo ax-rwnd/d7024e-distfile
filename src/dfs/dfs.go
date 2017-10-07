@@ -20,8 +20,7 @@ var HashError = errors.New("hash wrong length")
 // Handle errors
 func check (err error) bool {
     if err != nil {
-        log.Fatal(err)
-        return false
+        panic(err)
     }
     return true
 }
@@ -47,24 +46,16 @@ func main () {
     if len(args) > 0 {
         if args[0] == "store" {
             r := handleStore(&cConfig, args[1:])
-            println("Your hash is:",r)
+            println(r)
         } else if args[0] == "cat" {
             content := handleCat(&cConfig, args[1:])
-            print(content)
+            println(content)
         } else if args[0] == "pin" {
             status := handlePin(&cConfig, args[1:])
-            if status == "SUCCESS" {
-                print("The content was pinned.")
-            } else {
-                print("The operation failed.")
-            }
+            println(status)
         } else if args[0] == "unpin" {
             status := handleUnpin(&cConfig, args[1:])
-            if status == "SUCCESS" {
-                print("The content is no longer pinned.")
-            } else {
-                print("The operation failed.")
-            }
+            println(status)
         }
     } else {
         log.Fatal("Usage: dsf (store filename|cat hex-hash|pin hex-hash|unpin hex-hash)")
