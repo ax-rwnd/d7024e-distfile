@@ -515,10 +515,24 @@ func (network *Network) SendDownloadMessage(hash *KademliaID, receiver *Contact)
     }
     message := NetworkMessage{MsgType: rpc.TRANSFER_DATA_MSG, Origin: network.Routing.Me, RpcID: *NewKademliaIDRandom(), Data: hashMsg}
     fmt.Printf("%s message from %v: %v\n", network.Routing.Me.String(), message.Origin.String(), message.String())
+
+    // Downloading may fail if graph was cut
+    defer func() {
+        if r := recover(); r != nil {
+            log.Println("Failed to download due to", r)
+        }
+    }()
     response := network.SendReceiveMessage(TCP, &message, receiver)
     fmt.Printf("%s downloaded from %v: %v\n", network.Routing.Me.String(), response.Origin.String(), response.String())
     if response != nil && response.MsgType == rpc.TRANSFER_DATA_MSG && response.RpcID.Equals(&message.RpcID) {
-        return response.Data
+        // Check that the downloaded file actually matches what was requested
+        if !NewKademliaIDFromBytes(response.Data).Equals(hash) {
+            panic("content checksum failure")
+        } else {
+            fmt.Println("Checksum passed.")
+            network.Store.Insert(*hash, false, response.Data)
+            return response.Data
+        }
     }
     return []byte{}
 }
