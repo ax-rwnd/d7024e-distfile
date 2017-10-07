@@ -14,81 +14,135 @@ var NotFoundError = errors.New("value was not found in map")
 
 // Globals
 var EvictionTime = 24 * time.Hour
+var RepublishTime = 24 * time.Hour
 
 type kvData struct {
-    id         KademliaID
-    data       []byte
-    timeToLive time.Time
-    pinned     bool
+    id            KademliaID
+    data          []byte
+    evictionTime  time.Time
+    pinned        bool
+    republishTime time.Time
+    republishFunc func(id *KademliaID)
 }
 
 type KVStore struct {
-    timer         *time.Timer
-    evictionQueue []*kvData
-    mapping       map[KademliaID]kvData
-    mutex         *sync.Mutex
+    evictionTimer  *time.Timer
+    evictionQueue  []*kvData
+    republishTimer *time.Timer
+    republishQueue []*kvData
+    mapping        map[KademliaID]*kvData
+    mutex          *sync.Mutex
 }
 
 func NewKVStore() *KVStore {
     kvStore := new(KVStore)
     kvStore.mutex = &sync.Mutex{}
-    kvStore.mapping = make(map[KademliaID]kvData)
+    kvStore.mapping = make(map[KademliaID]*kvData)
+
+    kvStore.republishQueue = []*kvData{}
+    kvStore.republishTimer = time.NewTimer(0)
+    <-kvStore.republishTimer.C
+    go kvStore.republishThread()
+
     kvStore.evictionQueue = []*kvData{}
-    kvStore.timer = time.NewTimer(0)
-    <-kvStore.timer.C
+    kvStore.evictionTimer = time.NewTimer(0)
+    <-kvStore.evictionTimer.C
     go kvStore.evictionThread()
+
     return kvStore
+}
+
+func (kvStore *KVStore) scheduleRepublish(data *kvData) {
+    kvStore.republishQueue = append(kvStore.republishQueue, data)
+    newDuration := data.republishTime.Sub(time.Now())
+    // If the republish thread was idle before, restart it
+    if len(kvStore.republishQueue) == 1 {
+        kvStore.republishTimer.Reset(newDuration)
+    }
+    if data.republishFunc != nil {
+        fmt.Println("Republishing", data.id.String(), "in", newDuration.String(), ", queue size", len(kvStore.evictionQueue))
+    }
+}
+
+func (kvStore *KVStore) republishThread() {
+    for {
+        <-kvStore.republishTimer.C
+        if len(kvStore.republishQueue) > 0 {
+            toRepublish := kvStore.republishQueue[0]
+            kvStore.republishQueue = kvStore.republishQueue[1:]
+            if _, err := kvStore.Lookup(toRepublish.id); err == nil && toRepublish.republishFunc != nil {
+                // Store contains this entry, republish it and add last in queue
+                fmt.Println("Republishing", toRepublish.id.String())
+                toRepublish.republishFunc(&toRepublish.id)
+                toRepublish.republishTime = time.Now().Add(RepublishTime)
+                kvStore.republishQueue = append(kvStore.republishQueue, toRepublish)
+            } else {
+                // This entry was removed from store before republish timeout, or has no republish function
+            }
+        }
+        if len(kvStore.republishQueue) > 0 {
+            newDuration := kvStore.republishQueue[0].republishTime.Sub(time.Now())
+            if newDuration < 0 {
+                newDuration = 0
+            }
+            fmt.Println("Next republish scheduled in", newDuration)
+            kvStore.republishTimer.Reset(newDuration)
+        }
+    }
+
 }
 
 func (kvStore *KVStore) scheduleEviction(data *kvData) {
     kvStore.evictionQueue = append(kvStore.evictionQueue, data)
+    newDuration := data.evictionTime.Sub(time.Now())
     // If the eviction thread was idle before, restart it
     if len(kvStore.evictionQueue) == 1 {
-        newDuration := kvStore.evictionQueue[0].timeToLive.Sub(time.Now())
-        kvStore.timer.Reset(newDuration)
-        fmt.Println("Evicting", data.id.String(), "in", newDuration.String(),"eviction queue size", len(kvStore.evictionQueue))
+        kvStore.evictionTimer.Reset(newDuration)
     }
+    fmt.Println("Evicting", data.id.String(), "in", newDuration.String(), ", queue size", len(kvStore.evictionQueue))
 }
 
 func (kvStore *KVStore) evictionThread() {
     for {
-        <-kvStore.timer.C
+        <-kvStore.evictionTimer.C
         fmt.Println("Eviction timeout...")
         kvStore.mutex.Lock()
         if len(kvStore.evictionQueue) > 0 {
             toEvict := kvStore.evictionQueue[0]
             kvStore.evictionQueue = kvStore.evictionQueue[1:]
             if !toEvict.pinned {
+                // Remove from store
                 delete(kvStore.mapping, toEvict.id)
                 fmt.Println("Evicted unpinned", toEvict.id.String())
             } else {
                 fmt.Println("Ignoring pinned", toEvict.id.String())
             }
         } else {
-            kvStore.timer.Stop()
             fmt.Println("Eviction queue empty...")
         }
         if len(kvStore.evictionQueue) > 0 {
-            newDuration := kvStore.evictionQueue[0].timeToLive.Sub(time.Now())
+            newDuration := kvStore.evictionQueue[0].evictionTime.Sub(time.Now())
             if newDuration < 0 {
                 newDuration = 0
             }
-            fmt.Println("Next eviction scheduled in",newDuration)
-            kvStore.timer.Reset(newDuration)
+            fmt.Println("Next eviction scheduled in", newDuration)
+            kvStore.evictionTimer.Reset(newDuration)
         }
         kvStore.mutex.Unlock()
     }
 }
 
-// Don't silently update duplicate data (in case of collision)
-func (kvStore *KVStore) Insert(hash KademliaID, pinned bool, data []byte) (outData kvData, err error) {
+func (kvStore *KVStore) Insert(hash KademliaID, pinned bool, data []byte,
+    republishFunc func(*KademliaID)) (outData kvData, err error) {
     kvStore.mutex.Lock()
     if kvStore.mapping == nil {
         err = NotInitializedError
     } else {
-        outData = kvData{id: hash, data: data, timeToLive: time.Now().Add(EvictionTime), pinned: pinned}
-        kvStore.mapping[hash] = outData
+        outData = kvData{id: hash, data: data, pinned: pinned, evictionTime: time.Now().Add(EvictionTime),
+            republishTime: time.Now().Add(RepublishTime), republishFunc: republishFunc}
+        kvStore.mapping[hash] = &outData
         kvStore.scheduleEviction(&outData)
+        kvStore.scheduleRepublish(&outData)
     }
     kvStore.mutex.Unlock()
     return
@@ -122,8 +176,8 @@ func (kvStore *KVStore) Unpin(hash KademliaID) (err error) {
     kvStore.mutex.Lock()
     if val, ok := kvStore.mapping[hash]; ok {
         val.pinned = false
-        val.timeToLive = time.Now().Add(EvictionTime)
-        kvStore.scheduleEviction(&val)
+        val.evictionTime = time.Now().Add(EvictionTime)
+        kvStore.scheduleEviction(val)
         kvStore.mapping[hash] = val
     } else {
         err = NotFoundError

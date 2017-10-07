@@ -23,7 +23,7 @@ func NewKademlia(ip string, tcpPort int, udpPort int) *Kademlia {
 // Lookup the k participants which have a kademlia ID closest to another ID
 func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
     me := kademlia.Net.Routing.Me
-    // The lookup intiator starts by picking \alpha nodes from its closest non-empty k-bucket...
+    // The lookup initiator starts by picking \alpha nodes from its closest non-empty k-bucket...
     closestContacts := kademlia.Net.Routing.FindClosestContacts(target, ALPHA)
     // This holds the nodes we have already queried
     contactsVisited := make(map[KademliaID]Contact)
@@ -192,15 +192,23 @@ func (kademlia *Kademlia) LookupData(hash *KademliaID) *[]Contact {
 // Store the data locally, then have other nodes Store the contact of ones holding the data
 func (kademlia *Kademlia) Store(data []byte) KademliaID {
     hash := NewKademliaIDFromBytes(data)
-    kademlia.Net.Store.Insert(*hash, false, data)
-    contacts := kademlia.LookupContact(hash)
-    for _, contact := range contacts {
-        kademlia.Net.SendStoreMessage(hash, &contact)
-    }
+    kademlia.Net.Store.Insert(*hash, false, data, kademlia.Republish)
+    kademlia.Republish(hash)
     return *hash
 }
 
 // Download data from another kademlia participant
 func (kademlia *Kademlia) Download(hash *KademliaID, from *Contact) []byte {
-    return kademlia.Net.SendDownloadMessage(hash, from)
+    data := kademlia.Net.SendDownloadMessage(hash, from)
+    kademlia.Store(data)
+    return data
+}
+
+// Tell relevant nodes in network that you have a file available
+func (kademlia *Kademlia) Republish(hash *KademliaID) {
+    fmt.Printf("%v republishes %v\n", kademlia.Net.Routing.Me.Address, hash.String())
+    contacts := kademlia.LookupContact(hash)
+    for _, contact := range contacts {
+        kademlia.Net.SendStoreMessage(hash, &contact)
+    }
 }

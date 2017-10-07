@@ -172,7 +172,7 @@ func TestSendFindDataMessage(t *testing.T) {
     if err != nil {
         t.Fail()
     }
-    node2.Store.Insert(*hash, false, marshaledContact)
+    node2.Store.Insert(*hash, false, marshaledContact, nil)
     contacts := node1.SendFindDataMessage(hash, &node2.Routing.Me)
     if contacts == nil || len(contacts) == 0 || !contacts[0].Equals(&node1.Routing.Me) {
         t.Fail()
@@ -214,7 +214,7 @@ func TestTcpTransfer(t *testing.T) {
     data, _ := ioutil.ReadFile("test.bin")
     hash := NewKademliaIDFromBytes(data)
     // Store data in node 2, then transfer it to node 1
-    node2.Store.Insert(*hash, false, data)
+    node2.Store.Insert(*hash, false, data, nil)
     // Send TCP download request
     downloadedData := node1.SendDownloadMessage(hash, &node2.Routing.Me)
     // Check if download worked

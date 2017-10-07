@@ -12,7 +12,7 @@ func TestKVSInsertLookup(t *testing.T) {
     data := []byte("Test data")
     id := NewKademliaIDFromBytes(data)
     pinned := false
-    _, err := kvStore.Insert(*id, pinned, data)
+    _, err := kvStore.Insert(*id, pinned, data, nil)
     if err != nil {
         log.Println(err)
         t.Fail()
@@ -55,7 +55,7 @@ func TestKVSEvictionPin(t *testing.T) {
 
     // Add some data
     fmt.Printf("Inserted %v\n", id1.String())
-    kvStore.Insert(*id1, false, data1)
+    kvStore.Insert(*id1, false, data1, nil)
     // Wait two seconds, then check that data is still there
     timer := time.NewTimer(2 * time.Second)
     <-timer.C
@@ -66,21 +66,9 @@ func TestKVSEvictionPin(t *testing.T) {
 
     // Insert some more data before previous is evicted
     fmt.Printf("Inserted %v\n", id2.String())
-    kvStore.Insert(*id2, true, data2)
+    kvStore.Insert(*id2, true, data2, nil)
 
     // Wait until ID1 should have been evicted
-    timer = time.NewTimer(2 * time.Second)
-    <-timer.C
-    if _, err := kvStore.Lookup(*id1); err == nil {
-        t.Fail()
-        log.Println("ID1 was not removed")
-    }
-    if _, err := kvStore.Lookup(*id2); err != nil {
-        t.Fail()
-        log.Println("Pinned ID2 was removed")
-    }
-
-    //
     timer = time.NewTimer(2 * time.Second)
     <-timer.C
     if _, err := kvStore.Lookup(*id1); err == nil {
@@ -119,7 +107,7 @@ func TestKVSEvictionNoPin(t *testing.T) {
 
     // Add some data
     fmt.Printf("Inserted %v\n", id1.String())
-    kvStore.Insert(*id1, false, data1)
+    kvStore.Insert(*id1, false, data1, nil)
     // Wait two seconds, then check that data is still there
     timer := time.NewTimer(2 * time.Second)
     <-timer.C
@@ -130,7 +118,7 @@ func TestKVSEvictionNoPin(t *testing.T) {
 
     // Insert some more data before previous is evicted
     fmt.Printf("Inserted %v\n", id2.String())
-    kvStore.Insert(*id2, false, data2)
+    kvStore.Insert(*id2, false, data2, nil)
 
     // Wait until ID1 should have been evicted
     // Check that ID1 was removed before ID2
@@ -158,12 +146,12 @@ func TestKVSEvictionNoPin(t *testing.T) {
     }
 }
 
-func TestPinUnpin(t *testing.T) {
+func TestKVSPinUnpin(t *testing.T) {
     kvStore := NewKVStore()
 
     data := []byte("Test data")
     id := NewKademliaIDFromBytes(data)
-    kvStore.Insert(*id, false, data)
+    kvStore.Insert(*id, false, data, nil)
 
     kvStore.Pin(*id)
     if val, _ := kvStore.mapping[*id]; val.pinned == false {
