@@ -99,3 +99,34 @@ func TestContactCandiatesAppend(t *testing.T) {
         t.Fail()
     }
 }
+
+func TestSort(t *testing.T) {
+
+	id1 := NewKademliaID("FFFFFFFF00000000000000000000000000000000")
+	id2 := NewKademliaID("FFFFFFFF00000000000000000000000000000001")
+	id3 := NewKademliaID("0000000000000000000000000000000000000002")
+	id4 := NewKademliaID("FFFF000000000000000000000000000000000003")
+	id5 := NewKademliaID("FFFFFFFF00000000000000000000000000000004")
+	contact1 := NewContact(id1, "localhost", 0, 0)
+	contact2 := NewContact(id2, "localhost", 0, 0)
+	contact3 := NewContact(id3, "localhost", 0, 0)
+	contact4 := NewContact(id4, "localhost", 0, 0)
+	contact5 := NewContact(id5, "localhost", 0, 0)
+	
+	cons := []Contact{contact1, contact2, contact3, contact4, contact5}
+	cand := ContactCandidates{contacts: cons}
+	
+	contact := NewContact(NewKademliaID("0000000000000000000000000000000000000000"), "localhost", 0, 0)
+	for i, cont := range cand.contacts {
+		cont.CalcDistance(contact.ID)
+		cand.contacts[i] = cont
+	}	
+	cand.Sort()
+	for i := 0; i < (len(cand.contacts)-1); i++ {
+		con := cand.contacts[i]
+		b := con.Less(&cand.contacts[i+1])
+		if !b {
+			t.Fail()
+		}
+	}
+}
