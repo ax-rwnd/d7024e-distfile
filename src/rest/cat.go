@@ -24,27 +24,35 @@ func catHandler(k *kademlia.Kademlia, w http.ResponseWriter, r *http.Request) {
 
     contactsWithData := *k.LookupData(hashID)
     fmt.Println("Contacts with data:", contactsWithData)
-    if len(contactsWithData) > 0 {
-        if len(contactsWithData) == 1 && contactsWithData[0].ID.Equals(k.Net.Routing.Me.ID) {
-            // We have the file locally
-            data, _ = k.Net.Store.Lookup(*hashID)
-            var content []kademlia.Contact
-            if err := msgpack.Unmarshal(data, &content); err != nil {
-                fmt.Println("Your data found locally:", string(data))
-                sendResponse(w, http.StatusOK, string(data))
+
+    if len(contactsWithData) == 1 && contactsWithData[0].ID.Equals(k.Net.Routing.Me.ID) {
+        // The data is in our KVStore
+        data, _ = k.Net.Store.Lookup(*hashID)
+        var content []kademlia.Contact
+        if err := msgpack.Unmarshal(data, &content); err != nil {
+            fmt.Println("Your data found locally:", string(data))
+            sendResponse(w, http.StatusOK, string(data))
+            return
+        } else {
+            panic("self-referential content in KVStore")
+        }
+    } else {
+        // The data is elsewhere
+        fmt.Println("Your data is in another castle")
+
+            // We got a list of contacts
+        for _, contact := range contactsWithData {
+            fmt.Println("Candidate:", contact)
+            downloadedData := k.Download(hashID, &contact)
+
+            if len(downloadedData) > 0 {
+                fmt.Println("Your data was downloaded remotely:", string(downloadedData))
+                sendResponse(w, http.StatusOK, string(downloadedData))
                 return
-            } else {
-                fmt.Println("Your data is in another castle", content)
-                for _, contact := range content {
-                    downloadedData := k.Download(hashID, &contact)
-                    if len(data) > 0 {
-                        fmt.Println("Your data was downloaded remotely:", string(downloadedData))
-                        sendResponse(w, http.StatusOK, string(downloadedData))
-                        return
-                    }
-                }
             }
         }
+        fmt.Println("None of the contacts had the file.")
     }
+
     sendResponse(w, http.StatusNoContent, "")
 }
