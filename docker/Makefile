@@ -12,4 +12,4 @@ test_store:
 
 .PHONY: kademliad
 kademliad:
-	docker run -it --rm --workdir /kademlia d7024e_deploy  sh -c "./kademliad"
+	docker run -it --rm --net kademnet --workdir /kademlia d7024e_deploy  sh -c "./kademliad"

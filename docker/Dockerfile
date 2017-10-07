@@ -6,5 +6,5 @@ VOLUME /kademlia/
 
 ADD build/bin /kademlia
 
-COPY ./build/d7024e-distfile/src/dfs/dfs.toml /kademlia/dfs.toml
-COPY ./build/d7024e-distfile/src/server/kademliad.toml /kademlia/kademliad.toml
+COPY ./dfs.toml /kademlia/dfs.toml
+COPY ./kademliad.toml /kademlia/kademliad.toml
