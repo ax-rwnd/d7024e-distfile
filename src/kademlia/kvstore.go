@@ -22,6 +22,12 @@ type kvData struct {
     pinned     bool
 }
 
+// For REST/debug only
+type KVPair struct {
+    Hash    KademliaID
+    Data    kvData
+}
+
 type KVStore struct {
     timer         *time.Timer
     evictionQueue []*kvData
@@ -130,4 +136,17 @@ func (kvStore *KVStore) Unpin(hash KademliaID) (err error) {
     }
     kvStore.mutex.Unlock()
     return
+}
+
+// Grab all data in the table and dump it
+func (kvStore *KVStore) DumpStore() []KVPair {
+    els := make([]KVPair, len(kvStore.mapping))
+
+    i := 0
+    for k, v := range kvStore.mapping {
+        els[i] = KVPair{k, v}
+        i++
+    }
+
+    return els
 }
