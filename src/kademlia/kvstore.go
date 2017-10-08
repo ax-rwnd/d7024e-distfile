@@ -198,7 +198,7 @@ func (kvStore *KVStore) DumpStore() []KVPair {
 
     i := 0
     for k, v := range kvStore.mapping {
-        els[i] = KVPair{k, v}
+        els[i] = KVPair{k, *v}
         i++
     }
 
