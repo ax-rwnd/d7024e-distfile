@@ -15,9 +15,10 @@ const (
     TCP = iota
     UDP
 )
-const CONNECTION_TIMEOUT = time.Second * 2
-const CONNECTION_RETRY_DELAY = time.Second
-const RECEIVE_BUFFER_SIZE = 1 << 20
+
+var ConnectionTimeout = time.Second * 2
+var ConnectionRetryDelay = time.Second
+var ReceiveBufferSize = 1 << 20 // One MB
 
 // Msgpack package requires public variables
 type NetworkMessage struct {
@@ -82,7 +83,7 @@ func (network *Network) receiveFindContactMessage(connection net.PacketConn, rem
         log.Printf("%v malformed message from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
         return
     }
-    closestContacts := network.Routing.FindClosestContacts(&findTarget, K)
+    closestContacts := network.Routing.FindClosestContacts(&findTarget, ReplicationFactor)
     // Marshal the closest contacts and send them in the response
     closestContactsMsg, err := msgpack.Marshal(closestContacts)
     if err != nil {
@@ -179,7 +180,7 @@ func (network *Network) receiveTransferDataMessage(connection net.Conn, message 
 
 // Someone initiated a TCP connection, check if they want to download data from us
 func (network *Network) receiveTCP(connection net.Conn) {
-    buffer := make([]byte, RECEIVE_BUFFER_SIZE)
+    buffer := make([]byte, ReceiveBufferSize)
     _, err := connection.Read(buffer)
     if err != nil {
         log.Printf("%v unreadable TCP message from %v: %v\n", network.Routing.Me.Address, connection.RemoteAddr().String(), err)
@@ -205,7 +206,7 @@ func (network *Network) receiveTCP(connection net.Conn) {
 
 // Someone sent us a UDP packet, check if it is an RPC message and handle it in that case
 func (network *Network) receiveUDP(connection net.PacketConn) {
-    buf := make([]byte, RECEIVE_BUFFER_SIZE)
+    buf := make([]byte, ReceiveBufferSize)
     _, remoteAddress, err := connection.ReadFrom(buf)
     if err != nil {
         fmt.Printf("%v UDP read failed from %v: %v\n", network.Routing.Me.Address, remoteAddress, err)
@@ -350,32 +351,32 @@ func (network *Network) SendReceiveMessage(protocol int, message *NetworkMessage
         return nil
     }
     defer connection.Close()
-    timer := time.NewTimer(CONNECTION_TIMEOUT)
+    timer := time.NewTimer(ConnectionTimeout)
     channel := make(chan *NetworkMessage)
     go func(m chan *NetworkMessage) {
         for {
-            buf := make([]byte, RECEIVE_BUFFER_SIZE)
+            buf := make([]byte, ReceiveBufferSize)
             for {
                 n := 0
                 if protocol == UDP {
                     // For UDP connections, just read one datagram (should be an RPC)
                     n, err = connection.Read(buf)
                     if err != nil {
-                        timeout := time.NewTimer(CONNECTION_RETRY_DELAY)
+                        timeout := time.NewTimer(ConnectionRetryDelay)
                         <-timeout.C
                         continue
                     }
                 } else {
                     // For TCP file transfers, we can keep reading until there is no more left
                     for {
-                        newBuf := make([]byte, RECEIVE_BUFFER_SIZE)
+                        newBuf := make([]byte, ReceiveBufferSize)
                         newN, err := connection.Read(newBuf)
                         if newN <= 0 {
                             break
                         }
-                        timer.Reset(CONNECTION_TIMEOUT)
+                        timer.Reset(ConnectionTimeout)
                         if err != nil {
-                            timeout := time.NewTimer(CONNECTION_RETRY_DELAY)
+                            timeout := time.NewTimer(ConnectionRetryDelay)
                             <-timeout.C
                             continue
                         }

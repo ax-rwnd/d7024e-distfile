@@ -17,15 +17,15 @@ func TestBootstrap(t *testing.T) {
     // Crete a star topofmty
     NewKademlia("127.0.0.1", 4000, 4001)
     nodes := 9
-	//expected := imin(nodes+1, K)
+    //expected := imin(nodes+1, ReplicationFactor)
 
     k := make([]*Kademlia, nodes)
-    for i := 0; i<len(k); i++ {
+    for i := 0; i < len(k); i++ {
         k[i] = NewKademlia("127.0.0.1", getTestPort(), getTestPort())
     }
 
-    for i := 0; i<len(k); i++ {
-       k[i].Bootstrap("127.0.0.1", 4000, 4001)
+    for i := 0; i < len(k); i++ {
+        k[i].Bootstrap("127.0.0.1", 4000, 4001)
     }
 
     // Test finding another node
@@ -38,11 +38,11 @@ func TestBootstrap(t *testing.T) {
         cc[1] <- k[len(k)-1].LookupContact(k[0].Net.Routing.Me.ID)
     }()
 
-	// Check that k elements were returned, if k elements exist
-	//TODO: one more contact is returned than expected
+    // Check that k elements were returned, if k elements exist
+    //TODO: one more contact is returned than expected
     /*
     con1 := <-cc[0]
-	fmt.Println("k",K," nodes",nodes," expected",expected)
+	fmt.Println("k",ReplicationFactor," nodes",nodes," expected",expected)
     if len(con1) != expected {
         fmt.Println("incorrect amount of contacts returned, got",len(con1),"expected",expected)
         t.Fail()
@@ -57,7 +57,7 @@ func TestBootstrap(t *testing.T) {
 
     // Test pinging various, presumably connected nodes
     fmt.Println("\n\nSending messages")
-    for i := 0; i<len(k); i++ {
+    for i := 0; i < len(k); i++ {
         // If the node is the same, skip
         if i == len(k)-1-i {
             continue
@@ -69,8 +69,8 @@ func TestBootstrap(t *testing.T) {
             if response.MsgType != rpc.PONG_MSG ||
                 !response.RpcID.Equals(&msg.RpcID) ||
                 !response.Origin.ID.Equals(k[len(k)-1-i].Net.Routing.Me.ID) {
-                    fmt.Println("Failed to respond.")
-                    t.Fail()
+                fmt.Println("Failed to respond.")
+                t.Fail()
             }
         }
     }

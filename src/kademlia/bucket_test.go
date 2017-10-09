@@ -90,10 +90,10 @@ func TestDumpContacts(t *testing.T) {
     b.addContact(con2, nil)
 
     c_out := b.DumpContacts()
-    if c_out[0] != con1 && c_out[1] != con1  {
+    if c_out[0] != con1 && c_out[1] != con1 {
         t.Fail()
     }
-    if c_out[0] != con2 && c_out[1] != con2  {
+    if c_out[0] != con2 && c_out[1] != con2 {
         t.Fail()
     }
 }

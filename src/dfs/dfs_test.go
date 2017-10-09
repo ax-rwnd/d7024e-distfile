@@ -83,10 +83,10 @@ func serveTestEndpoints(config *clientConfig) {
 }
 
 // Serve a fixed hash over network, make sure it's the requested one
-func TestCat (t *testing.T) {
+func TestCat(t *testing.T) {
     // Start server
     go serveTestEndpoints(&config)
-    time.Sleep(1*time.Second)
+    time.Sleep(1 * time.Second)
 
     // Request the fixed hash
     var args = []string{"DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF"}
@@ -97,7 +97,7 @@ func TestCat (t *testing.T) {
         fmt.Println("Cat should GET.")
         t.Fail()
     } else if "CORRECT_HASH" != response {
-        fmt.Println("Exptected",args[0], "got", response)
+        fmt.Println("Exptected", args[0], "got", response)
         t.Fail()
     }
 }
@@ -106,7 +106,7 @@ func TestCat (t *testing.T) {
 func TestStore(t *testing.T) {
     // Start server
     go serveTestEndpoints(&config)
-    time.Sleep(1*time.Second)
+    time.Sleep(1 * time.Second)
 
     // Perform request
     var args = []string{"test.html"}
@@ -128,16 +128,16 @@ func TestStore(t *testing.T) {
 
     // Make sure that the response is the same as the hasher
     if response != hexString {
-        fmt.Println("Expected", hexString,"got",response)
+        fmt.Println("Expected", hexString, "got", response)
         t.Fail()
     }
 }
 
 // 
-func TestPinUnpin (t *testing.T) {
+func TestPinUnpin(t *testing.T) {
     // Start server
     go serveTestEndpoints(&config)
-    time.Sleep(1*time.Second)
+    time.Sleep(1 * time.Second)
 
     var args = []string{"DEADBEEFDEADBEEFDEADBEEFDEADBEEFDEADBEEF"}
 
@@ -146,7 +146,7 @@ func TestPinUnpin (t *testing.T) {
 
     // Test the returned value
     if "SUCCESS" != pinResponse {
-        fmt.Println("Exptected",args[0], "got", pinResponse)
+        fmt.Println("Exptected", args[0], "got", pinResponse)
         t.Fail()
     }
 
@@ -155,7 +155,7 @@ func TestPinUnpin (t *testing.T) {
 
     // Test the returned value
     if "SUCCESS" != unpinResponse {
-        fmt.Println("Exptected",args[0], "got", unpinResponse)
+        fmt.Println("Exptected", args[0], "got", unpinResponse)
         t.Fail()
     }
 }

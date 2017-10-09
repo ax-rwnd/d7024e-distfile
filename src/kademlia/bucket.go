@@ -23,7 +23,7 @@ func (bucket *bucket) addContact(contact Contact, pingFunc func(*Contact) bool) 
         }
     }
     if element == nil {
-        if bucket.list.Len() < bucketSize {
+        if bucket.list.Len() < ReplicationFactor {
             bucket.list.PushFront(contact)
         } else if pingFunc != nil {
             last := bucket.list.Back().Value.(Contact)

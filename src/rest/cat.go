@@ -40,7 +40,7 @@ func catHandler(k *kademlia.Kademlia, w http.ResponseWriter, r *http.Request) {
         // The data is elsewhere
         fmt.Println("Your data is in another castle")
 
-            // We got a list of contacts
+        // We got a list of contacts
         for _, contact := range contactsWithData {
             fmt.Println("Candidate:", contact)
             downloadedData := k.Download(hashID, &contact)

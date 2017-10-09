@@ -4,6 +4,11 @@ udpport     = 8001
 restport    = 8002
 alpha       = 3
 replication = 20
+evictionTime = "24h0m0s"
+republishTime = "24h0m0s"
+connectionTimeout = "5s"
+connectionRetryDelay = "1s"
+receiveBufferSize = 1048576
 
 # Bootstrap node, base case, uses own address and port, boots to itself
 # Otherwise, use a node already in the network

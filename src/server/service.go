@@ -51,6 +51,14 @@ func (service *Service) Manage(config *daemonConfig) (string, error) { // Start 
         }
     }
 
+    kademlia.Alpha = config.Alpha
+    kademlia.ReplicationFactor = config.ReplicationFactor
+    kademlia.ConnectionTimeout = config.ConnectionTimeout
+    kademlia.ConnectionRetryDelay = config.ConnectionRetryDelay
+    kademlia.ReceiveBufferSize = config.ReceiveBufferSize
+    kademlia.EvictionTime = config.EvictionTime
+    kademlia.RepublishTime = config.RepublishTime
+
     k := kademlia.NewKademlia(config.Address, config.TcpPort, config.UdpPort)
     k.Bootstrap(config.BootAddr, config.TcpPort, config.BootPort)
 

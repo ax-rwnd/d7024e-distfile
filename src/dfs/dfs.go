@@ -19,7 +19,7 @@ var ArgumentError = errors.New("invalid arguments")
 var HashError = errors.New("hash wrong length")
 
 // Handle errors
-func check (err error) bool {
+func check(err error) bool {
     if err != nil {
         panic(err)
     }
@@ -28,10 +28,11 @@ func check (err error) bool {
 
 // Config through TOML
 const config_file = "dfs.toml"
+
 var cConfig clientConfig
 
 type clientConfig struct {
-    Address     string
+    Address string
 }
 
 func init() {
@@ -41,7 +42,7 @@ func init() {
     }
 }
 
-func main () {
+func main() {
     args := os.Args[1:]
 
     if len(args) > 0 {
@@ -72,7 +73,7 @@ func main () {
 // Store data on client
 func handleStore(config *clientConfig, args []string) string {
     if len(args) != 1 {
-       check(ArgumentError)
+        check(ArgumentError)
     }
 
     // Load file
@@ -185,8 +186,8 @@ func handleContacts(config *clientConfig) string {
     var contactsOut []kademlia.Contact
     json.Unmarshal(body, &contactsOut)
     var strOut string
-    for _, c := range(contactsOut) {
-        strOut += fmt.Sprintf("ID: %s IP: %s Ports: %d/%d\n",c.ID, c.Address.IP, c.Address.UdpPort, c.Address.TcpPort)
+    for _, c := range (contactsOut) {
+        strOut += fmt.Sprintf("ID: %s IP: %s Ports: %d/%d\n", c.ID, c.Address.IP, c.Address.UdpPort, c.Address.TcpPort)
     }
     return strOut
 }
@@ -211,7 +212,7 @@ func handleDumpKVS(config *clientConfig) string {
     var dataOut []kademlia.KVPair
     json.Unmarshal(body, &dataOut)
     strOut := "In table:\n"
-    for _, d := range(dataOut) {
+    for _, d := range (dataOut) {
         strOut += fmt.Sprintf("\tHash: %s Data: %.10s\n", d.Hash.String(), d.Data)
     }
     return strOut

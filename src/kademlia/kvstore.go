@@ -27,8 +27,8 @@ type kvData struct {
 
 // For REST/debug only
 type KVPair struct {
-    Hash    KademliaID
-    Data    kvData
+    Hash KademliaID
+    Data kvData
 }
 
 type KVStore struct {
