@@ -59,6 +59,9 @@ func NewKVStore() *KVStore {
 }
 
 func (kvStore *KVStore) scheduleRepublish(data *kvData) {
+    if data.republishFunc == nil {
+        return
+    }
     kvStore.republishQueue = append(kvStore.republishQueue, data)
     newDuration := data.republishTime.Sub(time.Now())
     // If the republish thread was idle before, restart it
