@@ -1,6 +1,7 @@
 package main
 
 import (
+    "strconv"
     "log"
     "os"
     "github.com/BurntSushi/toml"
@@ -45,6 +46,22 @@ func main() {
         stdlog.Println("Detecting address!")
         config.Address = os.Getenv("KADIP")
         stdlog.Println("New address", config.Address)
+    }
+
+    if config.BootAddr == "detect" {
+        stdlog.Println("Detecting bootstrap address!")
+		config.BootAddr = os.Getenv("BOOTIP")
+        stdlog.Println("New bootstrap address", config.Address)
+    }
+
+    if config.BootPort == -1 {
+        stdlog.Println("Detecting bootstrap port!")
+        if newPort, err := strconv.Atoi(os.Getenv("BOOTPORT")); err == nil {
+            config.BootPort = newPort
+            stdlog.Println("New bootstrap port", config.BootPort)
+        } else {
+            errlog.Println("Failed setting new port", err)
+        }
     }
 
     runDaemon(&config)
