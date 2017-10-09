@@ -119,7 +119,7 @@ func (network *Network) receiveStoreDataMessage(connection net.PacketConn, remot
         log.Printf("%v failed to marshal value from %v: %v\n", network.Routing.Me.Address, remote_addr, err)
         return
     }
-    network.Store.Insert(key, false, marshaledOwners)
+    network.Store.Insert(key, false, marshaledOwners, nil)
     fmt.Printf("%v stored hash key %v from %v\n", network.Routing.Me.Address, key.String(), message.Origin.String())
 }
 
@@ -343,7 +343,7 @@ func (network *Network) SendMessage(protocol int, message *NetworkMessage, conta
     return connection, nil
 }
 
-// Send over UDP, then block until response or timeout
+// Send over network, then block until response or timeout
 func (network *Network) SendReceiveMessage(protocol int, message *NetworkMessage, contact *Contact) *NetworkMessage {
     connection, err := network.SendMessage(protocol, message, contact)
     if err != nil {
@@ -463,7 +463,7 @@ func (network *Network) SendFindContactAndIdMessage(findTarget *KademliaID, rece
 
 // Send a Find Node message over UDP. Blocks until response or timeout.
 func (network *Network) SendFindContactMessage(findTarget *KademliaID, receiver *Contact) ([]Contact) {
-    contacts, _ := network.SendFindContactAndIdMessage(findTarget,receiver);
+    contacts, _ := network.SendFindContactAndIdMessage(findTarget, receiver)
     return contacts
 }
 
@@ -530,7 +530,6 @@ func (network *Network) SendDownloadMessage(hash *KademliaID, receiver *Contact)
             panic("content checksum failure")
         } else {
             fmt.Println("Checksum passed.")
-            network.Store.Insert(*hash, false, response.Data)
             return response.Data
         }
     }

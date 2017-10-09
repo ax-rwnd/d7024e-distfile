@@ -79,7 +79,77 @@ func TestLookupContact(t *testing.T) {
     }
 }
 
-//
+// Test republish
+func TestRepublish(t *testing.T) {
+    EvictionTime = 3 * time.Second
+    RepublishTime = 5 * time.Second
+
+    data, _ := ioutil.ReadFile("test.bin")
+    hash := NewKademliaIDFromBytes(data)
+
+    // Create some network nodes
+    kademlias := createKademliaMesh(5, 5)
+    owner := kademlias[0]
+    // Store some data
+    owner.Store(data)
+    err := owner.Net.Store.Pin(*hash)
+    if err != nil {
+        log.Println("Pin failed")
+        t.Fail()
+    }
+    // Wait for the messages to propagate
+    timer := time.NewTimer(time.Second * 2)
+    <-timer.C
+
+    // Check that other nodes have registered the store
+    storeRegistered := false
+    for i := 1; i < len(kademlias); i++ {
+        k := kademlias[i]
+        if _, err := k.Net.Store.Lookup(*hash); err == nil {
+            // Store is registered in at least one node other than owner
+            storeRegistered = true
+            break
+        }
+    }
+    if !storeRegistered {
+        log.Println("Store message  fail")
+        t.Fail()
+    }
+    // Wait until nodes have evicted the store
+    timer.Reset(time.Second * 2)
+    <-timer.C
+    purgeRegistered := true
+    for i := 1; i < len(kademlias); i++ {
+        k := kademlias[i]
+        if _, err := k.Net.Store.Lookup(*hash); err == nil {
+            // Store has not been purged from this node, so fail
+            purgeRegistered = false
+        }
+    }
+    if !purgeRegistered {
+        t.Fail()
+        log.Println("Eviction fail")
+    }
+    timer.Reset(time.Second * 2)
+    <-timer.C
+    republishRegistered := false
+    for i := 1; i < len(kademlias); i++ {
+        k := kademlias[i]
+        if _, err := k.Net.Store.Lookup(*hash); err == nil {
+            // Store is registered in at least one node other than owner
+            republishRegistered = true
+            break
+        }
+    }
+    if !republishRegistered {
+        log.Println("Republish message fail")
+        t.Fail()
+    }
+    for _, k := range kademlias {
+        k.Net.Close()
+    }
+}
+
 // Test storing and finding data
 func TestLookupStoreData(t *testing.T) {
     data, _ := ioutil.ReadFile("test.bin")

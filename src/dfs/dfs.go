@@ -60,6 +60,9 @@ func main () {
         } else if args[0] == "routes" {
             contacts := handleContacts(&cConfig)
             println(contacts)
+        } else if args[0] == "dump" {
+            dataDump := handleDumpKVS(&cConfig)
+            println(dataDump)
         }
     } else {
         log.Fatal("Usage: dsf (store filename|cat hex-hash|pin hex-hash|unpin hex-hash)")
@@ -171,6 +174,10 @@ func handleContacts(config *clientConfig) string {
     check(requestErr)
     defer response.Body.Close()
 
+    if response.StatusCode == http.StatusBadRequest {
+        panic("wrong type of request")
+    }
+
     // Read response
     body, readErr := ioutil.ReadAll(response.Body)
     check(readErr)
@@ -180,6 +187,32 @@ func handleContacts(config *clientConfig) string {
     var strOut string
     for _, c := range(contactsOut) {
         strOut += fmt.Sprintf("ID: %s IP: %s Ports: %d/%d\n",c.ID, c.Address.IP, c.Address.UdpPort, c.Address.TcpPort)
+    }
+    return strOut
+}
+
+func handleDumpKVS(config *clientConfig) string {
+    // Perform request
+    request := fmt.Sprintf("http://%s/dump", config.Address)
+    response, requestErr := http.Get(request)
+    check(requestErr)
+    defer response.Body.Close()
+
+    if response.StatusCode == http.StatusBadRequest {
+        panic("wrong type of request")
+    } else if response.StatusCode == 500 {
+        panic("internal server error")
+    }
+
+    // Read response
+    body, readErr := ioutil.ReadAll(response.Body)
+    check(readErr)
+
+    var dataOut []kademlia.KVPair
+    json.Unmarshal(body, &dataOut)
+    strOut := "In table:\n"
+    for _, d := range(dataOut) {
+        strOut += fmt.Sprintf("\tHash: %s Data: %.10s\n", d.Hash.String(), d.Data)
     }
     return strOut
 }
