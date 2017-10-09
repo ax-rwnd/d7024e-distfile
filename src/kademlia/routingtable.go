@@ -4,8 +4,6 @@ import (
     "sync"
 )
 
-const bucketSize = 20
-
 type RoutingTable struct {
     Me      Contact
     buckets [IDLength * 8]*bucket

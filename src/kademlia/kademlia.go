@@ -7,8 +7,8 @@ import (
     "github.com/vmihailenco/msgpack"
 )
 
-const ALPHA = 3
-const K = bucketSize
+var Alpha = 3
+var ReplicationFactor = 20
 
 type Kademlia struct {
     Net *Network
@@ -24,7 +24,7 @@ func NewKademlia(ip string, tcpPort int, udpPort int) *Kademlia {
 func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
     me := kademlia.Net.Routing.Me
     // The lookup initiator starts by picking \alpha nodes from its closest non-empty k-bucket...
-    closestContacts := kademlia.Net.Routing.FindClosestContacts(target, ALPHA)
+    closestContacts := kademlia.Net.Routing.FindClosestContacts(target, Alpha)
     // This holds the nodes we have already queried
     contactsVisited := make(map[KademliaID]Contact)
     contactsVisited[*me.ID] = me
@@ -73,7 +73,7 @@ func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
             contactsToVisit := []Contact{}
             // Check if we have already visited these contacts. If not, queue them for future visits.
             // Simpler version than the rules in the paper
-            for i := 0; i < min(K, len(receivedContacts)); i++ {
+            for i := 0; i < min(ReplicationFactor, len(receivedContacts)); i++ {
                 newContact := receivedContacts[i]
                 mutex.Lock()
                 if _, ok := contactsVisited[*newContact.ID]; !ok {
@@ -126,7 +126,7 @@ func (kademlia *Kademlia) LookupContact(target *KademliaID) ([]Contact) {
         contactCandidates.contacts = append(contactCandidates.contacts, candidate)
     }
     contactCandidates.Sort()
-    return contactCandidates.contacts[0:min(K, len(candidates))]
+    return contactCandidates.contacts[0:min(ReplicationFactor, len(candidates))]
 }
 
 // Find the owner of a file with specific hash.

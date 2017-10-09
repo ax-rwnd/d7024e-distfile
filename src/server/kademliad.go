@@ -4,6 +4,7 @@ import (
     "log"
     "os"
     "github.com/BurntSushi/toml"
+    "time"
 )
 
 const config_file = "kademliad.toml"
@@ -17,14 +18,19 @@ func init() {
 }
 
 type daemonConfig struct {
-    Address     string
-    TcpPort     int
-    UdpPort     int
-    RestPort    int
-    Alpha       int
-    Replication int
-	BootAddr	string
-	BootPort	int
+    Address              string
+    TcpPort              int
+    UdpPort              int
+    RestPort             int
+    Alpha                int
+    ReplicationFactor    int
+    BootAddr             string
+    BootPort             int
+    EvictionTime         time.Duration
+    RepublishTime        time.Duration
+    ConnectionTimeout    time.Duration
+    ConnectionRetryDelay time.Duration
+    ReceiveBufferSize    int
 }
 
 func main() {
@@ -37,7 +43,7 @@ func main() {
     // Grab ip from environment
     if config.Address == "detect" {
         stdlog.Println("Detecting address!")
-		config.Address = os.Getenv("KADIP")
+        config.Address = os.Getenv("KADIP")
         stdlog.Println("New address", config.Address)
     }
 

@@ -235,12 +235,12 @@ func TestNetworkAddContactSuccess(t *testing.T) {
     node1 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     //node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     id, _ := hex.DecodeString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-    var i byte
-    for i = 0; i < bucketSize+1; i++ {
+    var i int
+    for i = 0; i < ReplicationFactor+1; i++ {
         // Decrease the new ID to one lower than previous
         newId := make([]byte, len(id))
         copy(newId, id)
-        newId[len(newId)-1] = id[len(id)-1] - i
+        newId[len(newId)-1] = id[len(id)-1] - byte(i)
         // Add contact with this ID
         contact := NewContact(NewKademliaID(hex.EncodeToString(newId)), "127.0.0.1", getTestPort(), getTestPort())
         contactWasAdded, _ := node1.Routing.AddContact(contact, node1.SendPingMessage)
@@ -260,12 +260,12 @@ func TestNetworkAddContactFail(t *testing.T) {
     networks = append(networks, node1);
     //node2 := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
     id, _ := hex.DecodeString("FFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFF")
-    var i byte
-    for i = 0; i < bucketSize+1; i++ {
+    var i int
+    for i = 0; i < ReplicationFactor+1; i++ {
         // Decrease the new ID to one lower than previous
         newId := make([]byte, len(id))
         copy(newId, id)
-        newId[len(newId)-1] = id[len(id)-1] - i
+        newId[len(newId)-1] = id[len(id)-1] - byte(i)
         // Add contact with this ID
         nodei := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
         networks = append(networks, nodei);
@@ -274,7 +274,7 @@ func TestNetworkAddContactFail(t *testing.T) {
         contactWasAdded, _ := node1.Routing.AddContact(nodei.Routing.Me, node1.SendPingMessage)
         // The last contact will be pinged to see if it is alive, since bucket is full.
         // Since the node will respond to ping, it will not be added
-        if i == bucketSize && contactWasAdded {
+        if i == ReplicationFactor && contactWasAdded {
             t.Fail()
         }
     }

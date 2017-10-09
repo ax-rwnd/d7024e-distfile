@@ -17,7 +17,7 @@ func TestBootstrap(t *testing.T) {
     // Crete a star topofmty
     NewKademlia("127.0.0.1", 4000, 4001)
     nodes := 9
-	//expected := imin(nodes+1, K)
+	//expected := imin(nodes+1, ReplicationFactor)
 
     k := make([]*Kademlia, nodes)
     for i := 0; i<len(k); i++ {
@@ -42,7 +42,7 @@ func TestBootstrap(t *testing.T) {
 	//TODO: one more contact is returned than expected
     /*
     con1 := <-cc[0]
-	fmt.Println("k",K," nodes",nodes," expected",expected)
+	fmt.Println("k",ReplicationFactor," nodes",nodes," expected",expected)
     if len(con1) != expected {
         fmt.Println("incorrect amount of contacts returned, got",len(con1),"expected",expected)
         t.Fail()
