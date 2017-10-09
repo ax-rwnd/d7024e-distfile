@@ -8,7 +8,6 @@ import (
 
 func (kad *Kademlia) Bootstrap(bootAddr string, tcpPort int, bootPort int) {
     netw := kad.Net
-
     tmpID := NewKademliaID("0000000000000000000000000000000000000000") // dummy ID
     boot := NewContact(tmpID, bootAddr, tcpPort, bootPort)
 
@@ -31,7 +30,7 @@ func (kad *Kademlia) Bootstrap(bootAddr string, tcpPort int, bootPort int) {
     if !b {
         errors.New("contact couldn't be added")
     }
-
+    kad.Net.Routing.mutex.Lock()
     // all index from 0 to the bootIndex is further away from the nóde than the boot node
     bootIndex := netw.Routing.getBucketIndex(boot.ID)
     // pick a random node in each bucket to send node lookup on
@@ -52,4 +51,5 @@ func (kad *Kademlia) Bootstrap(bootAddr string, tcpPort int, bootPort int) {
             log.Println("No buckets to ping.")
         }
     }
+    kad.Net.Routing.mutex.Unlock()
 }

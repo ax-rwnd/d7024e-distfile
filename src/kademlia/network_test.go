@@ -270,7 +270,9 @@ func TestNetworkAddContactFail(t *testing.T) {
         nodei := NewNetwork("127.0.0.1", getTestPort(), getTestPort())
         networks = append(networks, nodei);
         kademliaId := NewKademliaID(hex.EncodeToString(newId))
+        nodei.Routing.mutex.Lock()
         nodei.Routing.Me.ID = kademliaId
+        nodei.Routing.mutex.Unlock()
         contactWasAdded, _ := node1.Routing.AddContact(nodei.Routing.Me, node1.SendPingMessage)
         // The last contact will be pinged to see if it is alive, since bucket is full.
         // Since the node will respond to ping, it will not be added
