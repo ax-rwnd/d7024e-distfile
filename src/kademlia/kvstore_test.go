@@ -52,6 +52,7 @@ func TestKVSEvictionPin(t *testing.T) {
 
     // Set a short eviction time for testing
     EvictionTime = 3 * time.Second
+    RepublishTime = 24 * time.Hour
 
     // Add some data
     fmt.Printf("Inserted %v\n", id1.String())
@@ -104,6 +105,7 @@ func TestKVSEvictionNoPin(t *testing.T) {
 
     // Set a short eviction time for testing
     EvictionTime = 3 * time.Second
+    RepublishTime = 24 * time.Hour
 
     // Add some data
     fmt.Printf("Inserted %v\n", id1.String())

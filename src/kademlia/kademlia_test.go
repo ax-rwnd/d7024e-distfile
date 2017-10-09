@@ -52,6 +52,8 @@ func createKademliaMesh(width int, height int) []*Kademlia {
 
 // Test looking up a contact with specific kademlia ID
 func TestLookupContact(t *testing.T) {
+    EvictionTime = 24 * time.Hour
+    RepublishTime = 24 * time.Hour
     kademlias := createKademliaMesh(10, 5)
     numNodes := len(kademlias)
     var cc = []chan []Contact{make(chan []Contact), make(chan []Contact),}
@@ -152,6 +154,9 @@ func TestRepublish(t *testing.T) {
 
 // Test storing and finding data
 func TestLookupStoreData(t *testing.T) {
+    EvictionTime = 24 * time.Hour
+    RepublishTime = 24 * time.Hour
+
     data, _ := ioutil.ReadFile("test.bin")
     // Create some network nodes
     kademlias := createKademliaMesh(5, 5)
@@ -189,6 +194,8 @@ func TestLookupStoreData(t *testing.T) {
 
 // Test storing data on multiple nodes and finding it from another
 func TestLookupStoreDataMultiple(t *testing.T) {
+    EvictionTime = 24 * time.Hour
+    RepublishTime = 24 * time.Hour
     // Load a text file to store on network
     data, _ := ioutil.ReadFile("test.txt")
     hash := NewKademliaIDFromBytes(data)

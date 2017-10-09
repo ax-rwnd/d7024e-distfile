@@ -16,7 +16,7 @@ const (
     UDP
 )
 
-var ConnectionTimeout = time.Second * 2
+var ConnectionTimeout = time.Second * 5
 var ConnectionRetryDelay = time.Second
 var ReceiveBufferSize = 1 << 20 // One MB
 
