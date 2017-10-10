@@ -51,6 +51,33 @@ func (service *Service) Manage(config *daemonConfig) (string, error) { // Start 
         }
     }
 
+    if config.Alpha < 1 {
+        panic("Invalid alpha value")
+    }
+    if config.ReplicationFactor < 1 {
+        panic("Invalid replication factor")
+    }
+    if config.RepublishTime < 1 {
+        panic("Invalid republish time")
+    }
+    if config.EvictionTime < 1 {
+        panic("Invalid eviction time")
+    }
+    if config.ReceiveBufferSize < 1024 {
+        panic("Receive buffer size too small")
+    }
+    if config.ConnectionTimeout < 0 {
+        panic("Invalid connection timeout")
+    }
+    if config.ConnectionRetryDelay < 0 {
+        panic("Invalid connection retry timeout")
+    }
+    if config.RestPort < 1 || config.UdpPort < 1 || config.TcpPort < 1 {
+        panic("Invalid port setting")
+    }
+    if len(config.Address) == 0 || len(config.BootAddr) == 0 {
+        panic("Invalid IP address setting")
+    }
     kademlia.Alpha = config.Alpha
     kademlia.ReplicationFactor = config.ReplicationFactor
     kademlia.ConnectionTimeout = config.ConnectionTimeout

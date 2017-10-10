@@ -3,11 +3,11 @@ tcpport     = 8000
 udpport     = 8001
 restport    = 8002
 alpha       = 3
-replication = 20
-evictionTime = "24h0m0s"
-republishTime = "24h0m0s"
-connectionTimeout = "5s"
-connectionRetryDelay = "1s"
+replicationFactor = 20
+evictionTime = 86400000000000 # int64(time.Hour*24)
+republishTime = 86400000000000
+connectionTimeout = 5000000000 # int64(time.Second*5)
+connectionRetryDelay = 1000000000 # int64(time.Second*1)
 receiveBufferSize = 1048576
 
 # Bootstrap node, base case, uses own address and port, boots to itself

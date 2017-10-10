@@ -16,6 +16,9 @@ func (routingTable *RoutingTable) GetBucket(index int) bucket {
 }
 
 func NewRoutingTable(me Contact) *RoutingTable {
+    if ReplicationFactor <= 0 {
+        panic("Replication factor invalid")
+    }
     routingTable := &RoutingTable{}
     for i := 0; i < IDLength*8; i++ {
         routingTable.buckets[i] = newBucket() // 160 new buckets
