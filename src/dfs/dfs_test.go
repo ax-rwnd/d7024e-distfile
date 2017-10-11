@@ -16,6 +16,13 @@ import (
     "encoding/hex"
 )
 
+var testPort int = 7000
+
+func getTestPort() int {
+    testPort++
+    return testPort
+}
+
 var testConfig = "test_config.toml"
 var config clientConfig
 
@@ -156,6 +163,20 @@ func TestPinUnpin(t *testing.T) {
     // Test the returned value
     if "SUCCESS" != unpinResponse {
         fmt.Println("Exptected", args[0], "got", unpinResponse)
+        t.Fail()
+    }
+}
+
+func TestContacts(t *testing.T) {
+    // Start a Kademlia server
+    contacts := handleContacts(&config)
+    if len(contacts) > 0 {
+        fmt.Println("contacts", contacts, "len", len(contacts))
+        t.Fail()
+    }
+    dump := handleDumpKVS(&config)
+    if len(dump) <= 0 {
+        fmt.Println("kvs", dump, "len", len(dump))
         t.Fail()
     }
 }
