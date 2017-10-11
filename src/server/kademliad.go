@@ -50,7 +50,7 @@ func main() {
 
     if config.BootAddr == "detect" {
         stdlog.Println("Detecting bootstrap address!")
-		config.BootAddr = os.Getenv("BOOTIP")
+        config.BootAddr = os.Getenv("BOOTIP")
         stdlog.Println("New bootstrap address", config.Address)
     }
 
