@@ -58,8 +58,7 @@ func TestKVSEvictionPin(t *testing.T) {
     fmt.Printf("Inserted %v\n", id1.String())
     kvStore.Insert(*id1, false, data1, nil)
     // Wait two seconds, then check that data is still there
-    timer := time.NewTimer(2 * time.Second)
-    <-timer.C
+    time.Sleep(2 * time.Second)
     if _, err := kvStore.Lookup(*id1); err != nil {
         t.Fail()
         log.Println("ID1 was removed too early")
@@ -70,8 +69,7 @@ func TestKVSEvictionPin(t *testing.T) {
     kvStore.Insert(*id2, true, data2, nil)
 
     // Wait until ID1 should have been evicted
-    timer = time.NewTimer(2 * time.Second)
-    <-timer.C
+    time.Sleep(2 * time.Second)
     if _, err := kvStore.Lookup(*id1); err == nil {
         t.Fail()
         log.Println("ID1 was not removed")
@@ -87,8 +85,7 @@ func TestKVSEvictionPin(t *testing.T) {
         t.Fail()
         log.Println("Unpinned ID2 was removed too early")
     }
-    timer = time.NewTimer(4 * time.Second)
-    <-timer.C
+    time.Sleep(4 * time.Second)
     if _, err := kvStore.Lookup(*id2); err == nil {
         t.Fail()
         log.Println("Unpinned ID2 was not removed")
@@ -111,8 +108,7 @@ func TestKVSEvictionNoPin(t *testing.T) {
     fmt.Printf("Inserted %v\n", id1.String())
     kvStore.Insert(*id1, false, data1, nil)
     // Wait two seconds, then check that data is still there
-    timer := time.NewTimer(2 * time.Second)
-    <-timer.C
+    time.Sleep(2 * time.Second)
     if _, err := kvStore.Lookup(*id1); err != nil {
         t.Fail()
         log.Println("ID1 was removed too early")
@@ -124,8 +120,7 @@ func TestKVSEvictionNoPin(t *testing.T) {
 
     // Wait until ID1 should have been evicted
     // Check that ID1 was removed before ID2
-    timer = time.NewTimer(2 * time.Second)
-    <-timer.C
+    time.Sleep(2 * time.Second)
     if _, err := kvStore.Lookup(*id1); err == nil {
         t.Fail()
         log.Println("ID1 was not removed")
@@ -136,8 +131,7 @@ func TestKVSEvictionNoPin(t *testing.T) {
     }
 
     // Wait until both eviction times have passed, then check data is gone
-    timer = time.NewTimer(2 * time.Second)
-    <-timer.C
+    time.Sleep(2 * time.Second)
     if _, err := kvStore.Lookup(*id1); err == nil {
         t.Fail()
         log.Println("ID1 was not removed")

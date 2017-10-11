@@ -100,8 +100,7 @@ func TestRepublish(t *testing.T) {
         t.Fail()
     }
     // Wait for the messages to propagate
-    timer := time.NewTimer(time.Second * 2)
-    <-timer.C
+    time.Sleep(time.Second * 2)
 
     // Check that other nodes have registered the store
     storeRegistered := false
@@ -118,8 +117,8 @@ func TestRepublish(t *testing.T) {
         t.Fail()
     }
     // Wait until nodes have evicted the store
-    timer.Reset(time.Second * 2)
-    <-timer.C
+    time.Sleep(time.Second * 2)
+
     purgeRegistered := true
     for i := 1; i < len(kademlias); i++ {
         k := kademlias[i]
@@ -132,8 +131,7 @@ func TestRepublish(t *testing.T) {
         t.Fail()
         log.Println("Eviction fail")
     }
-    timer.Reset(time.Second * 2)
-    <-timer.C
+    time.Sleep(time.Second * 2)
     republishRegistered := false
     for i := 1; i < len(kademlias); i++ {
         k := kademlias[i]
@@ -165,8 +163,8 @@ func TestLookupStoreData(t *testing.T) {
     // Store some data
     owner.Store(data)
     // Wait for the messages to propagate
-    timer := time.NewTimer(time.Second * 2)
-    <-timer.C
+    time.Sleep(time.Second * 2)
+
     // Read data from another node
     hash := NewKademliaIDFromBytes(data)
     candidates := *reader.LookupData(hash)
@@ -209,8 +207,8 @@ func TestLookupStoreDataMultiple(t *testing.T) {
     owner1.Store(data)
     owner2.Store(data)
     // Wait for the messages to propagate
-    timer := time.NewTimer(time.Second * 1)
-    <-timer.C
+    time.Sleep(time.Second * 1)
+
     // Read data from another node
     candidates := *requester.LookupData(hash)
     fmt.Printf("Found candidates %v\n", candidates)
