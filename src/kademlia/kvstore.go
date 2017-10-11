@@ -174,6 +174,7 @@ func (kvStore *KVStore) Pin(hash KademliaID) (err error) {
     if val, ok := kvStore.mapping[hash]; ok {
         val.pinned = true
         kvStore.mapping[hash] = val
+        fmt.Println(hash.String(),"was pinned")
     } else {
         err = NotFoundError
     }
@@ -188,6 +189,7 @@ func (kvStore *KVStore) Unpin(hash KademliaID) (err error) {
         val.evictionTime = time.Now().Add(EvictionTime)
         kvStore.scheduleEviction(val)
         kvStore.mapping[hash] = val
+        fmt.Println(hash.String(),"was unpinned")
     } else {
         err = NotFoundError
     }

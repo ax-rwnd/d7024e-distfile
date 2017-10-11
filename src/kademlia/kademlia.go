@@ -206,7 +206,7 @@ func (kademlia *Kademlia) Download(hash *KademliaID, from *Contact) []byte {
 
 // Tell relevant nodes in network that you have a file available
 func (kademlia *Kademlia) Republish(hash *KademliaID) {
-    fmt.Printf("%v republishes %v\n", kademlia.Net.Routing.Me.Address, hash.String())
+    fmt.Printf("%v publishes %v\n", kademlia.Net.Routing.Me.Address, hash.String())
     contacts := kademlia.LookupContact(hash)
     for _, contact := range contacts {
         kademlia.Net.SendStoreMessage(hash, &contact)

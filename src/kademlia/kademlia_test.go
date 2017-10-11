@@ -207,7 +207,7 @@ func TestLookupStoreDataMultiple(t *testing.T) {
     owner1.Store(data)
     owner2.Store(data)
     // Wait for the messages to propagate
-    time.Sleep(time.Second * 1)
+    time.Sleep(time.Second * 3)
 
     // Read data from another node
     candidates := *requester.LookupData(hash)
